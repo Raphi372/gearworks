@@ -95,6 +95,20 @@ input.txt, select.txt { background:#1a232e; border:1px solid #345; border-radius
 .toast.good { border-left-color:#7CFC9E; } .toast.warn { border-left-color:#ffd873; } .toast.bad { border-left-color:#ff7a7a; }
 @keyframes tin { from{opacity:0; transform:translateY(-8px);} to{opacity:1; transform:none;} }
 
+/* ---- multiplayer chat (bottom-left, right of the edit-tools column) ---- */
+#chat { position:absolute; left:60px; bottom:8px; width:min(340px,44vw); z-index:19;
+  display:flex; flex-direction:column; gap:5px; pointer-events:none; }
+#chatlog { display:flex; flex-direction:column; gap:3px; max-height:34vh; overflow-y:auto;
+  transition:opacity .5s; pointer-events:none; scrollbar-width:thin; }
+#chat.open #chatlog { pointer-events:auto; }
+#chatlog .cmsg { font-size:12px; line-height:1.35; background:rgba(10,14,20,0.78); border-radius:7px;
+  padding:3px 9px; max-width:100%; word-break:break-word; align-self:flex-start; animation:tin .18s ease; }
+#chatlog .cmsg .cn { font-weight:700; }
+#chatlog .cmsg.sys { color:#8aa; font-style:italic; background:rgba(10,14,20,0.55); }
+#chatinput { display:none; pointer-events:auto; background:rgba(18,24,32,0.96); border:1px solid #4aa3ff;
+  border-radius:8px; color:#dce3ea; padding:8px 11px; font-size:13px; width:100%; }
+#chat.open #chatinput { display:block; }
+
 #selinfo { left:8px; top:8px; width:210px; z-index:18; padding:0; }
 #selinfo .body { padding:8px 10px; font-size:12px; }
 #selinfo .body .k { color:#8aa; }
@@ -211,7 +225,13 @@ label.row { display:flex; justify-content:space-between; align-items:center; fon
   <div class="iconbtn" id="btn-market" title="Market">💹</div>
   <div class="iconbtn" id="btn-stats" title="Statistics">📊</div>
   <div class="iconbtn hidden" id="btn-players" title="Players">👥</div>
+  <div class="iconbtn hidden" id="btn-chat" title="Chat (Enter)">💬</div>
   <div class="iconbtn" id="btn-settings" title="Settings">⚙️</div>
+</div>
+
+<div id="chat" class="hidden">
+  <div id="chatlog"></div>
+  <input id="chatinput" type="text" maxlength="200" autocomplete="off" placeholder="Say something… (Enter to send, Esc to close)">
 </div>
 
 <div id="edittools">
