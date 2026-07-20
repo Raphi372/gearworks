@@ -1569,8 +1569,12 @@ var Lobby = (function () {
       authToken = localStorage.getItem('gearworks_token') || null;
     } catch (e) {}
     if (!el('lb-server').value) {
-      el('lb-server').value = location.protocol.startsWith('http')
-        ? location.origin.replace(/^http/, 'ws') : 'ws://localhost:8080';
+      // Priority: a build-injected backend (Cloudflare Pages → your tunnel),
+      // then the current origin (single-box self-host), then localhost.
+      var injected = (typeof window.GEARWORKS_DEFAULT_SERVER === 'string' && window.GEARWORKS_DEFAULT_SERVER) || '';
+      el('lb-server').value = injected ||
+        (location.protocol.startsWith('http')
+          ? location.origin.replace(/^http/, 'ws') : 'ws://localhost:8080');
     }
     el('lb-back').onclick = function () { hide(); el('mainmenu').classList.remove('hidden'); };
     el('lb-refresh').onclick = function () { reconnectBrowser(); };
