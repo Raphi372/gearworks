@@ -1539,9 +1539,13 @@ var Chat = (function () {
 var Lobby = (function () {
   var COLORS = ['#4aa3ff', '#7CFC9E', '#ffd873', '#ff7a7a', '#d76fb0', '#9fd8e0', '#e0a074', '#b39ddb'];
   var color = COLORS[0];
-  var browserSess = null;    // connection used for the room list
+  var browserSess = null;     // lobby connection (auth + room browser)
+  var account = null;         // { id, username, color, guest } or null
+  var authToken = null;       // persisted session token
+  var authTab = 'guest';      // guest | login | register
 
   function el(id) { return document.getElementById(id); }
+  function esc(s) { return UI.esc(s); }
 
   function init() {
     var sw = el('lb-colors');
@@ -1562,13 +1566,14 @@ var Lobby = (function () {
         sw.querySelectorAll('.swatch').forEach(function (x, i) { x.classList.toggle('sel', COLORS[i] === color); });
       }
       if (prefs.server) el('lb-server').value = prefs.server;
+      authToken = localStorage.getItem('gearworks_token') || null;
     } catch (e) {}
     if (!el('lb-server').value) {
       el('lb-server').value = location.protocol.startsWith('http')
         ? location.origin.replace(/^http/, 'ws') : 'ws://localhost:8080';
     }
     el('lb-back').onclick = function () { hide(); el('mainmenu').classList.remove('hidden'); };
-    el('lb-refresh').onclick = function () { browse(); };
+    el('lb-refresh').onclick = function () { reconnectBrowser(); };
     el('lb-create').onclick = function () {
       go({ kind: 'create', roomName: el('lb-roomname').value || 'Factory World',
         public: el('lb-public').checked, maxPlayers: +el('lb-max').value || 8,
@@ -1583,7 +1588,12 @@ var Lobby = (function () {
       var b = e.target.closest('[data-roomcode]');
       if (b) go({ kind: 'join', code: b.dataset.roomcode, spectate: el('lb-spectate').checked });
     });
+    el('lb-myworlds').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-resume]');
+      if (b) go({ kind: 'resume', code: b.dataset.resume, public: false });
+    });
     el('reconn-leave').onclick = function () { location.reload(); };
+    renderAccount();
   }
 
   function savePrefs() {
@@ -1597,26 +1607,118 @@ var Lobby = (function () {
     el('mainmenu').classList.add('hidden');
     el('lobby').classList.remove('hidden');
     err('');
-    browse();
+    reconnectBrowser();
   }
   function hide() {
     el('lobby').classList.add('hidden');
     if (browserSess) { browserSess.leave(); browserSess = null; }
   }
   function err(s) { el('lb-err').textContent = s || ''; }
+  function setDot(cls) { var d = el('lb-conndot'); if (d) d.className = 'netdot ' + cls; }
 
-  // open a lobby-only connection to populate the room browser
-  function browse() {
-    if (browserSess) { browserSess.listRooms(); return; }
+  /* --------------------------- account UI --------------------------- */
+  function renderAccount() {
+    var host = el('lb-account');
+    if (account) {
+      host.innerHTML = '<div class="acc-signed"><span class="avatar" style="background:' + account.color + '">' +
+        esc((account.username || '?').charAt(0).toUpperCase()) + '</span>' +
+        '<span style="flex:1">Signed in as <b>' + esc(account.username) + '</b>' + (account.guest ? ' <span style="color:#8aa">(guest)</span>' : '') + '</span>' +
+        '<button class="btn gray" id="acc-logout">Log out</button></div>' +
+        '<div class="acc-guest">Your worlds are saved to this account and appear below.</div>';
+      el('acc-logout').onclick = logout;
+      // identity comes from the account now
+      el('lb-name').value = account.username; el('lb-name').disabled = true;
+    } else {
+      el('lb-name').disabled = false;
+      var t = authTab;
+      var h = '<div class="acc-tabs">' +
+        '<div class="acc-tab ' + (t === 'guest' ? 'sel' : '') + '" data-atab="guest">Guest</div>' +
+        '<div class="acc-tab ' + (t === 'login' ? 'sel' : '') + '" data-atab="login">Log in</div>' +
+        '<div class="acc-tab ' + (t === 'register' ? 'sel' : '') + '" data-atab="register">Register</div></div>';
+      if (t === 'guest') {
+        h += '<div class="acc-guest">Play instantly. Sign up to keep your worlds across devices.</div>' +
+          '<button class="btn" id="acc-go" style="width:100%;margin-top:6px">Continue as Guest</button>';
+      } else {
+        h += '<input class="txt" id="acc-user" placeholder="username" maxlength="20" autocomplete="username">' +
+          '<input class="txt" id="acc-pass" type="password" placeholder="password (8+ chars)" maxlength="200" autocomplete="' + (t === 'register' ? 'new-password' : 'current-password') + '">' +
+          '<button class="btn" id="acc-go" style="width:100%;margin-top:4px">' + (t === 'register' ? 'Create account' : 'Log in') + '</button>';
+      }
+      h += '<div class="acc-err" id="acc-err"></div>';
+      host.innerHTML = h;
+      host.querySelectorAll('[data-atab]').forEach(function (x) {
+        x.onclick = function () { authTab = x.dataset.atab; renderAccount(); };
+      });
+      el('acc-go').onclick = doAuth;
+      var pass = el('acc-pass'); if (pass) pass.onkeydown = function (e) { if (e.key === 'Enter') doAuth(); };
+    }
+  }
+
+  function accErr(s) { var e = el('acc-err'); if (e) e.textContent = s || ''; }
+
+  function doAuth() {
+    if (!browserSess) { reconnectBrowser(); }
+    if (!browserSess) { accErr('Not connected to a server'); return; }
+    if (authTab === 'guest') {
+      browserSess.sendAuth('guest', { username: el('lb-name').value || 'Guest', color: color });
+    } else {
+      var u = (el('acc-user').value || '').trim(), p = el('acc-pass').value || '';
+      if (!u || !p) { accErr('Enter a username and password'); return; }
+      accErr('…');
+      browserSess.sendAuth(authTab, { username: u, password: p, color: color });
+    }
+  }
+
+  function onAuth(m) {
+    if (!m.ok) { accErr(m.error || 'failed'); return; }
+    account = m.account;
+    authToken = m.token;
+    try { localStorage.setItem('gearworks_token', authToken); } catch (e) {}
+    renderAccount();
+    if (browserSess) browserSess.requestMyWorlds();
+  }
+
+  function logout() {
+    account = null; authToken = null;
+    try { localStorage.removeItem('gearworks_token'); } catch (e) {}
+    if (browserSess) browserSess.sendLogout();
+    renderAccount();
+    el('lb-myworlds').innerHTML = '';
+  }
+
+  function onMyWorlds(worlds) {
+    var host = el('lb-myworlds');
+    if (!account || !worlds || !worlds.length) { host.innerHTML = ''; return; }
+    var h = '<div class="divider"></div><b style="font-size:13px">Your saved worlds</b>';
+    worlds.forEach(function (w) {
+      var when = w.savedAt ? new Date(w.savedAt).toLocaleString() : '';
+      h += '<div class="world-row"><div><div class="wn">' + esc(w.name) + '</div>' +
+        '<div class="wd">' + esc(w.code) + (when ? ' • ' + esc(when) : '') + '</div></div>' +
+        '<button class="btn" data-resume="' + esc(w.code) + '">Resume</button></div>';
+    });
+    host.innerHTML = h;
+  }
+
+  /* --------------------------- room browser ------------------------- */
+  function reconnectBrowser() {
+    if (browserSess) { browserSess.listRooms(); if (account) browserSess.requestMyWorlds(); return; }
     savePrefs();
+    setDot('warn');
     browserSess = NetSession(null, el('lb-server').value, {
       ensureGame: function () { return null; },
       game: function () { return null; },
-      lobby: function (rooms) { onRooms(rooms); },
-      fail: function (reason) { onFail(reason); browserSess = null; },
-      status: function () {},
+      lobby: function (rooms, m) {
+        setDot('on');
+        if (m && m.maintenance) el('lb-maint').classList.remove('hidden'); else el('lb-maint').classList.add('hidden');
+        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); }
+        onRooms(rooms);
+      },
+      auth: function (m) { onAuth(m); },
+      myWorlds: function (worlds) { onMyWorlds(worlds); },
+      fail: function (reason) { setDot('off'); onFail(reason); browserSess = null; },
+      status: function (s) { if (s === 'offline') setDot('off'); },
     });
-    browserSess.begin({ kind: 'browse', name: el('lb-name').value || 'Engineer', color: color });
+    // auto-login with a stored token so returning players are signed in
+    browserSess.begin({ kind: 'browse', name: el('lb-name').value || 'Engineer', color: color, authToken: authToken });
   }
 
   function onRooms(rooms) {
@@ -1624,19 +1726,22 @@ var Lobby = (function () {
     if (!rooms || !rooms.length) { host.innerHTML = '<p style="color:#667;font-size:12px">No public games yet — host one below!</p>'; return; }
     var h = '';
     rooms.forEach(function (r) {
-      h += '<div class="roomrow"><div><div class="rn">' + UI.esc(r.name) + '</div>' +
-        '<div class="rd">' + r.players + '/' + r.maxPlayers + ' players' + (r.spectators ? ' +' + r.spectators + ' 👁' : '') + ' • code ' + r.code + '</div></div>' +
-        '<button class="btn" data-roomcode="' + r.code + '">Join</button></div>';
+      h += '<div class="roomrow"><div><div class="rn">' + esc(r.name) + '</div>' +
+        '<div class="rd">' + r.players + '/' + r.maxPlayers + ' players' + (r.spectators ? ' +' + r.spectators + ' 👁' : '') + ' • code ' + esc(r.code) + '</div></div>' +
+        '<button class="btn" data-roomcode="' + esc(r.code) + '">Join</button></div>';
     });
     host.innerHTML = h;
   }
-  function onFail(reason) { err(reason || 'Connection failed'); }
+  // A first-connect failure is expected on a static host whose origin isn't a
+  // game server — show a neutral hint, not an alarming "Connection failed".
+  function onFail(reason) { err(reason && reason !== 'connection failed' ? reason : 'Not connected — check the server address, then Refresh.'); }
 
   function go(intent) {
     savePrefs();
     if (browserSess) { browserSess.leave(); browserSess = null; }
-    intent.name = el('lb-name').value || 'Engineer';
+    intent.name = account ? account.username : (el('lb-name').value || 'Engineer');
     intent.color = color;
+    intent.authToken = authToken;
     err('Connecting…');
     Game.startNet(el('lb-server').value, intent);
   }

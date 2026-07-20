@@ -4,10 +4,12 @@ CREATE TYPE "Role" AS ENUM ('HOST', 'ADMIN', 'PLAYER', 'SPECTATOR');
 -- CreateTable
 CREATE TABLE "Account" (
     "id" TEXT NOT NULL,
+    "username" TEXT NOT NULL,
     "email" TEXT,
     "displayName" TEXT NOT NULL,
     "color" TEXT NOT NULL DEFAULT '#4aa3ff',
     "passwordHash" TEXT,
+    "isGuest" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -74,6 +76,9 @@ CREATE TABLE "Stat" (
 
     CONSTRAINT "Stat_pkey" PRIMARY KEY ("id")
 );
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Account_username_key" ON "Account"("username");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Account_email_key" ON "Account"("email");

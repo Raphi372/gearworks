@@ -24,7 +24,18 @@ All via environment variables (12-factor). Defaults in parentheses.
 | `EMPTY_ROOM_TTL_MS` | `600000` | idle-room grace before save+close |
 | `HASH_INTERVAL` | `100` | ticks between divergence audits |
 | `ALLOW_ORIGIN` | `*` | CORS for `/health` |
+| `AUTH_SECRET` | *(ephemeral)* | **set in prod** — HMAC key signing session tokens |
+| `TOKEN_TTL_DAYS` | `30` | session token lifetime |
+| `LOGIN_MAX_ATTEMPTS` | `8` | login attempts / 15 min / username |
+| `MAINTENANCE` | `0` | `1` rejects new games; clients show a banner |
+| `ERROR_WEBHOOK` | — | optional JSON error POST endpoint (Sentry or custom) |
 | `GIT_SHA` | `dev` | reported by `/health` as `version` |
+
+> **`AUTH_SECRET` must be a stable secret in production.** Without it the
+> server generates an ephemeral key at boot and logs a warning — sessions then
+> break on every restart. Generate one with
+> `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+> and set it as a Fly/Railway secret.
 
 ## Security posture
 
@@ -57,6 +68,17 @@ All via environment variables (12-factor). Defaults in parentheses.
   platform's log drain (Fly/Railway both aggregate stdout).
 - Divergence events log at `warn` with the room and tick — a spike is a
   cheating or determinism signal worth alerting on.
+- **Error tracking:** set `ERROR_WEBHOOK` to a URL and uncaught
+  errors/rejections are POSTed as JSON (`server/monitoring.js`) — no SDK, no
+  dependency. Point it at a Sentry ingestion endpoint or your own collector.
+  For a full Sentry SDK integration instead, add `@sentry/node` and initialise
+  it in `server/server.js`; keep it out of the default install to preserve the
+  zero-dependency runtime.
+- **Analytics (frontend):** to add privacy-friendly analytics (e.g. Plausible),
+  drop its script tag into `index.html` and extend the CSP `script-src`/
+  `connect-src` in `public/_headers` and `network/httpServer.js` to allow the
+  analytics host. Left out by default to keep the strict CSP and zero external
+  requests.
 
 ## Scaling
 

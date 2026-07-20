@@ -97,6 +97,7 @@ function NetSession(_unused, url, cb) {
     ws.onopen = function () {
       attempts = 0;
       send({ t: 'hello', proto: Core.PROTO, name: intent.name, color: intent.color,
+        authToken: intent.authToken || null,
         gz: typeof DecompressionStream !== 'undefined' });
       if (intent.kind === 'rejoin') send({ t: 'rejoin', token: intent.token });
       // create/join are sent after the lobby list arrives (see onmessage)
@@ -139,12 +140,15 @@ function NetSession(_unused, url, cb) {
   function onMsg(m) {
     switch (m.t) {
       case 'lobby':
-        cb.lobby && cb.lobby(m.rooms);
+        cb.lobby && cb.lobby(m.rooms, m);      // m carries account + maintenance
         if (intent.kind === 'create') send({ t: 'create', roomName: intent.roomName, public: intent.public,
           maxPlayers: intent.maxPlayers, spectate: intent.spectate, seed: intent.seed });
         else if (intent.kind === 'join') send({ t: 'join', code: intent.code, spectate: intent.spectate });
+        else if (intent.kind === 'resume') send({ t: 'resume', code: intent.code, public: intent.public });
         else if (intent.kind === 'browse') setStatus('lobby');
         return;
+      case 'auth': cb.auth && cb.auth(m); return;
+      case 'myWorlds': cb.myWorlds && cb.myWorlds(m.worlds || []); return;
       case 'welcome':
         self.myId = m.id; self.token = m.token; self.code = m.code; self.roomName = m.name;
         self.role = m.role; self.autosaveSec = m.autosaveSec;
@@ -234,6 +238,9 @@ function NetSession(_unused, url, cb) {
   self.setAutosave = function (v) { send({ t: 'setAutosave', v: v }); };
   self.admin = function (op, id, role) { send({ t: 'adm', op: op, id: id, role: role }); };
   self.sendChat = function (text) { send({ t: 'chat', text: text }); };
+  self.sendAuth = function (mode, data) { send(Object.assign({ t: 'auth', mode: mode }, data || {})); };
+  self.sendLogout = function () { send({ t: 'logout' }); };
+  self.requestMyWorlds = function () { send({ t: 'myWorlds' }); };
   self.listRooms = function () { send({ t: 'listRooms' }); };
   self.requestResync = function () { send({ t: 'resync' }); };
   self.pump = function () {};   // sim advances on server messages only

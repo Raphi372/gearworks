@@ -43,6 +43,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      # Run DB migrations BEFORE deploying new code, but only if a Postgres URL
+      # is configured. `migrate deploy` is safe/idempotent — it applies pending
+      # migrations only and never resets. Skipped entirely on the file backend.
+      - name: Run database migrations
+        if: ${{ secrets.DATABASE_URL != '' }}
+        run: |
+          npm install --no-audit --no-fund
+          npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Deploy
         run: flyctl deploy --remote-only
