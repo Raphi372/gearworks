@@ -76,6 +76,7 @@ function NetSession(_unused, url, cb) {
     playersMap: new Map(),
     cursors: new Map(),          // id -> {x,y, px,py, t} for interpolation
     players: function () { return Array.from(self.playersMap.values()); },
+    chatHistory: [],
   };
   var seqN = 1;
   var ready = false;             // snapshot restored; tick stream may apply
@@ -149,6 +150,7 @@ function NetSession(_unused, url, cb) {
         self.role = m.role; self.autosaveSec = m.autosaveSec;
         self.playersMap.clear();
         m.players.forEach(function (p) { self.playersMap.set(p.id, p); });
+        self.chatHistory = m.chat || [];      // replayed to the log after join completes
         reconnectInfo = { token: m.token };
         startTimers();
         setStatus('online');
@@ -187,6 +189,7 @@ function NetSession(_unused, url, cb) {
         return;
       }
       case 'rej': cb.reject && cb.reject(m.q, m.reason); return;
+      case 'chat': cb.chat && cb.chat(m); return;
       case 'pong':
         self.rtt = Math.round(self.rtt * 0.7 + (performance.now() - m.ts) * 0.3);
         cb.rtt && cb.rtt(self.rtt);
@@ -230,6 +233,7 @@ function NetSession(_unused, url, cb) {
   self.saveNow = function () { send({ t: 'save' }); };
   self.setAutosave = function (v) { send({ t: 'setAutosave', v: v }); };
   self.admin = function (op, id, role) { send({ t: 'adm', op: op, id: id, role: role }); };
+  self.sendChat = function (text) { send({ t: 'chat', text: text }); };
   self.listRooms = function () { send({ t: 'listRooms' }); };
   self.requestResync = function () { send({ t: 'resync' }); };
   self.pump = function () {};   // sim advances on server messages only

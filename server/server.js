@@ -180,6 +180,7 @@ class Room {
     if (opts.snapshot) this.game.Snapshot.restore(opts.snapshot);
     this.clients = new Map();     // playerId -> client record
     this.queue = [];              // commands awaiting the next tick
+    this.chatHistory = [];        // recent chat, replayed to joiners (ephemeral)
     this.created = Date.now();
     this.lastActive = Date.now();
     this.lastSave = Date.now();
@@ -272,7 +273,7 @@ class Room {
     this.sendSnapshot(c, 'join');
     conn.send({ t: 'welcome', id, token: c.token, code: this.code, name: this.name,
       role, tick: this.game.S.tick, autosaveSec: this.autosaveSec,
-      players: this.playerList() });
+      players: this.playerList(), chat: this.chatHistory });
     this.broadcast({ t: 'pjoin', p: this.publicInfo(c) }, c);
     log(`room ${this.code}: ${c.name} joined as ${role} (${this.clients.size} online)`);
     return c;
@@ -337,6 +338,22 @@ class Room {
       }
       case 'view': {  // camera rect for interest management
         if (Array.isArray(m.r) && m.r.length === 4 && m.r.every(isFinite)) c.view = m.r.map(Number);
+        break;
+      }
+      case 'chat': {   // reliable text chat — not part of the deterministic sim
+        if (typeof m.text !== 'string') return;
+        // sanitize: strip control chars, trim, cap length (client escapes on render)
+        const text = m.text.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 200);
+        if (!text) return;
+        const now = Date.now();
+        c.chatWindow = (c.chatWindow || []).filter((t) => now - t < 5000);
+        if (c.chatWindow.length >= 6) return;   // anti-spam: drop over-rate messages
+        c.chatWindow.push(now);
+        const msg = { t: 'chat', id: c.id, name: c.name, color: c.color, text };
+        this.chatHistory.push({ id: c.id, name: c.name, color: c.color, text });
+        if (this.chatHistory.length > 40) this.chatHistory.shift();
+        this.lastActive = now;
+        this.broadcast(msg);
         break;
       }
       case 'ping': c.conn.sendLossy({ t: 'pong', ts: m.ts, tick: this.game.S.tick }); break;
