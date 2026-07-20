@@ -25,8 +25,11 @@ const { createHttpServer } = require('./network/httpServer');
 const { createStore } = require('./database');
 const { createRegistry } = require('./world/registry');
 const { createLobby } = require('./players/lobby');
+const { createAuth } = require('./players/accounts');
+const { createMonitoring } = require('./monitoring');
 
 const log = config.log;
+const monitor = createMonitoring(config);
 
 async function main() {
   const store = createStore(config);
@@ -34,7 +37,8 @@ async function main() {
   catch (e) { log.error(`persistence backend not ready: ${e.message}`); process.exit(1); }
 
   const registry = createRegistry(config, store);
-  const handleConn = createLobby(config, registry);
+  const auth = createAuth(config, store);
+  const handleConn = createLobby(config, registry, auth, store);
 
   const server = createHttpServer(config, {
     getStats: () => ({ rooms: registry.size(), sessions: require('./players/sessions').size }),
@@ -66,8 +70,8 @@ async function main() {
   }
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('uncaughtException', (e) => { log.error(`uncaught: ${e.stack || e.message}`); });
-  process.on('unhandledRejection', (e) => { log.error(`unhandled rejection: ${e && (e.stack || e.message)}`); });
+  process.on('uncaughtException', (e) => { log.error(`uncaught: ${e.stack || e.message}`); monitor.report('uncaughtException', e); });
+  process.on('unhandledRejection', (e) => { log.error(`unhandled rejection: ${e && (e.stack || e.message)}`); monitor.report('unhandledRejection', e); });
 }
 
 main();

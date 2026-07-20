@@ -160,6 +160,18 @@ label.row { display:flex; justify-content:space-between; align-items:center; fon
   background:#10161e; border:1px dashed #2b3947; border-radius:8px; padding:8px; margin:8px 0; cursor:pointer; }
 .divider { border-top:1px solid #223040; margin:14px 0; }
 .errline { color:#ff7a7a; font-size:12px; min-height:16px; margin-top:6px; }
+/* account panel in the lobby */
+#lb-account { background:#141b23; border:1px solid #263340; border-radius:9px; padding:10px; margin:8px 0; }
+#lb-account .acc-signed { display:flex; align-items:center; gap:8px; font-size:13px; }
+#lb-account .acc-tabs { display:flex; gap:6px; margin-bottom:8px; }
+#lb-account .acc-tab { flex:1; text-align:center; padding:5px; font-size:12px; border-radius:6px; cursor:pointer; background:#1a232e; border:1px solid #2b3947; color:#9fb2c4; }
+#lb-account .acc-tab.sel { background:#26506e; border-color:#4aa3ff; color:#fff; }
+#lb-account input { width:100%; margin:4px 0; }
+#lb-account .acc-err { color:#ff7a7a; font-size:11px; min-height:14px; }
+#lb-account .acc-guest { color:#8aa; font-size:11px; margin-top:6px; }
+.world-row { display:flex; justify-content:space-between; align-items:center; padding:7px 9px; border:1px solid #263340; border-radius:7px; margin-bottom:5px; background:#141b23; }
+.world-row .wn { font-weight:600; font-size:13px; }
+.world-row .wd { font-size:11px; color:#8aa; }
 </style>
 </head>
 <body>
@@ -182,10 +194,19 @@ label.row { display:flex; justify-content:space-between; align-items:center; fon
 <!-- ======================= LOBBY ======================= -->
 <div id="lobby" class="screen hidden"><div class="card">
   <h3 style="border:none;padding:0 0 10px 0">Multiplayer <span class="closex" id="lb-back">✕</span></h3>
+  <div class="formrow"><label>Server</label><input class="txt" id="lb-server" style="flex:1" placeholder="ws://localhost:8080"><span id="lb-conndot" class="netdot off" title="Connection"></span></div>
+  <div id="lb-maint" class="hidden" style="background:#4a3a10;color:#ffd873;border-radius:7px;padding:7px 10px;font-size:12px;margin:6px 0">🔧 The server is in maintenance — new games are temporarily disabled.</div>
+
+  <!-- account: signed-in state or sign-in forms (rendered by JS) -->
+  <div id="lb-account"></div>
+
   <div class="formrow"><label>Your name</label><input class="txt" id="lb-name" maxlength="20" placeholder="Engineer" style="flex:1"></div>
   <div class="formrow"><label>Color</label><div class="swatches" id="lb-colors"></div></div>
-  <div class="formrow"><label>Server</label><input class="txt" id="lb-server" style="flex:1" placeholder="ws://localhost:8080"></div>
   <div class="formrow"><label></label><label style="min-width:0"><input type="checkbox" id="lb-spectate"> Join as spectator</label></div>
+
+  <!-- your saved worlds (signed-in players only) -->
+  <div id="lb-myworlds"></div>
+
   <div class="divider"></div>
   <div id="lb-rooms-wrap">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">

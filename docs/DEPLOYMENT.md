@@ -57,7 +57,13 @@ checks, forced HTTPS, auto-suspend when idle.
 ```bash
 fly launch --no-deploy           # creates the app + gearworks_data volume
 fly tokens create deploy         # → add as repo secret FLY_API_TOKEN
+# set a stable auth secret (required for accounts/sessions to survive restarts):
+fly secrets set AUTH_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
 ```
+
+If you also add `DATABASE_URL` as a **repo secret**, the backend deploy
+workflow runs `prisma migrate deploy` before shipping — migrations are applied
+safely and idempotently. With the default file backend, that step is skipped.
 
 After that, pushes touching `server/**` run
 `.github/workflows/backend-deploy.yml` → validate + test → `flyctl deploy`.

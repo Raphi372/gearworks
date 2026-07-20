@@ -40,9 +40,22 @@ const config = {
   HASH_INTERVAL: envInt('HASH_INTERVAL', 100),         // ticks between hash audits
   ALLOW_ORIGIN: process.env.ALLOW_ORIGIN || '*',       // CORS for /health etc.
 
+  // accounts / auth
+  AUTH_SECRET: process.env.AUTH_SECRET || '',      // HMAC key for session tokens; MUST be set in prod
+  TOKEN_TTL_DAYS: envInt('TOKEN_TTL_DAYS', 30),
+  LOGIN_MAX_ATTEMPTS: envInt('LOGIN_MAX_ATTEMPTS', 8),   // per username per 15 min
+  MAINTENANCE: process.env.MAINTENANCE === '1',    // reject new games with a notice
+
   PROTO: Core.PROTO,
   VERSION: process.env.GIT_SHA || 'dev',
 };
+
+// A stable secret is required to sign session tokens across restarts. In dev we
+// synthesize an ephemeral one (sessions won't survive a restart) and warn.
+if (!config.AUTH_SECRET) {
+  config.AUTH_SECRET = require('crypto').randomBytes(32).toString('hex');
+  config._ephemeralSecret = true;
+}
 
 /* ----------------------------- logging -------------------------------- */
 // Human-readable lines in dev; single-line JSON in production so log
@@ -61,4 +74,6 @@ log.warn = (msg, extra) => emit('warn', msg, extra);
 log.error = (msg, extra) => emit('error', msg, extra);
 
 config.log = log;
+if (config._ephemeralSecret) log.warn('AUTH_SECRET not set — using an ephemeral key; sessions will not survive a restart. Set AUTH_SECRET in production.');
+if (config.MAINTENANCE) log.warn('MAINTENANCE mode is ON — new games are disabled.');
 module.exports = config;

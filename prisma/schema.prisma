@@ -19,10 +19,12 @@ datasource db {
 // ---- Accounts: optional player identity for the persistent metagame --------
 model Account {
   id           String   @id @default(cuid())
+  username     String   @unique              // canonical login identifier
   email        String?  @unique
   displayName  String
   color        String   @default("#4aa3ff")
-  passwordHash String? // null for guest / OAuth-only accounts
+  passwordHash String? // "saltHex:hashHex" (scrypt); null for guest accounts
+  isGuest      Boolean  @default(false)
   createdAt    DateTime @default(now())
   lastSeenAt   DateTime @default(now())
 

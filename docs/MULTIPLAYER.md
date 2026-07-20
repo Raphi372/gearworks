@@ -206,17 +206,28 @@ used during development.
 
 # Protocol reference (JSON over WebSocket)
 
-Client → server: `hello{proto,name,color,gz}` · `listRooms` ·
+Client → server: `hello{proto,name,color,gz,authToken?}` · `auth{mode,…}` ·
+`logout` · `myWorlds` · `listRooms` ·
 `create{roomName,public,maxPlayers,spectate,seed?}` · `join{code,spectate}` ·
-`rejoin{token}` · `cmd{q,cmd}` · `cur{x,y}`ᴸ · `view{r}`ᴸ · `ping{ts}`ᴸ ·
-`hashReport{n,h}` · `resync` · `save` · `adm{op,id,role}` · `setAutosave{v}`
+`resume{code,public?}` · `rejoin{token}` · `cmd{q,cmd}` · `cur{x,y}`ᴸ ·
+`view{r}`ᴸ · `ping{ts}`ᴸ · `hashReport{n,h}` · `resync` · `save` ·
+`adm{op,id,role}` · `setAutosave{v}`
 
-Server → client: `lobby{rooms}` · `welcome{id,token,code,name,role,players,autosaveSec}` ·
+Server → client: `lobby{rooms,account?,maintenance}` · `auth{ok,account?,token?,error?}` ·
+`myWorlds{worlds}` · `welcome{id,token,code,name,role,players,autosaveSec,chat}` ·
 `snap{why,tick,gz|raw}` · `tk{n,c}` · `tks{n}` · `hash{n,h}` · `rej{q,reason}` ·
-`cur{p}`ᴸ · `pong{ts,tick}`ᴸ · `pjoin{p}` · `pleave{id}` · `prole{id,role}` ·
-`roomcfg` · `saved{by}` · `kicked` · `err{reason}`
+`chat{id,name,color,text}` · `cur{p}`ᴸ · `pong{ts,tick}`ᴸ · `pjoin{p}` ·
+`pleave{id}` · `prole{id,role}` · `roomcfg` · `saved{by}` · `kicked` · `err{reason}`
 
 ᴸ = lossy channel (coalesced, dropped under back-pressure).
+
+**Authentication** (`auth.mode`): `register{username,password,color}` ·
+`login{username,password}` · `guest{username,color}` · `token{token}`. On
+success the server returns a signed session token the client stores in
+`localStorage` and replays via `hello.authToken` for silent re-login. Auth is
+optional — anonymous play (create/join with an inline name) is unchanged.
+Passwords are scrypt-hashed with per-account salts; tokens are HMAC-signed
+(`AUTH_SECRET`); login is rate-limited. See docs/DATABASE.md.
 
 Sim commands (inside `cmd`): `place` `remove` `removeMany` `restore` `rotate`
 `setRecipe` `collect` `paste` `research` `sell` `buy` `setWeather`ᴬ

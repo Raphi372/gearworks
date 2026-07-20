@@ -28,6 +28,7 @@ class Room {
     this.code = opts.code;
     this.name = String(opts.name || 'Gearworks World').slice(0, 40);
     this.public = !!opts.public;
+    this.ownerId = opts.ownerId || null;      // account that owns this saved world
     this.maxPlayers = Math.min(this.cfg.MAX_PLAYERS_PER_ROOM, Math.max(2, opts.maxPlayers | 0 || this.cfg.MAX_PLAYERS_PER_ROOM));
     this.autosaveSec = Math.min(600, Math.max(15, opts.autosaveSec | 0 || 60));
     this.game = Core.createGame({ seed: opts.seed });
@@ -276,7 +277,7 @@ class Room {
   /* --------------------------- persistence ----------------------------- */
   save(kind) {
     const data = {
-      meta: { name: this.name, code: this.code, saved: Date.now(), kind, seq: ++this.saveSeq },
+      meta: { name: this.name, code: this.code, ownerId: this.ownerId, saved: Date.now(), kind, seq: ++this.saveSeq },
       snapshot: this.game.Snapshot.capture(),
     };
     const ok = this.store.saveRoom(this.code, data);

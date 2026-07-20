@@ -16,6 +16,21 @@ function createFileStore(config) {
 
   function roomPath(code) { return path.join(SAVE_DIR, `${code}.json`); }
 
+  /* -------- accounts (JSON map on disk; fine for self-host scale) -------- */
+  const accountsPath = path.join(SAVE_DIR, 'accounts.json');
+  let accounts = null;                 // { byId: {id: acct}, byName: {lower: id} }
+  function loadAccounts() {
+    if (accounts) return accounts;
+    try { accounts = JSON.parse(fs.readFileSync(accountsPath, 'utf8')); }
+    catch (e) { accounts = { byId: {}, byName: {} }; }
+    if (!accounts.byId) accounts = { byId: {}, byName: {} };
+    return accounts;
+  }
+  function persistAccounts() {
+    try { fs.writeFileSync(accountsPath, JSON.stringify(loadAccounts())); }
+    catch (e) { log.error(`account save failed: ${e.message}`); }
+  }
+
   function saveRoom(code, data) {
     try {
       const file = roomPath(code);
@@ -44,22 +59,55 @@ function createFileStore(config) {
   function listRoomCodes() {
     try {
       return fs.readdirSync(SAVE_DIR)
-        .filter((f) => /\.json$/.test(f) && !/\.bak\d+\./.test(f))
+        .filter((f) => /\.json$/.test(f) && f !== 'accounts.json' && !/\.bak\d+\./.test(f))
         .map((f) => f.replace(/\.json$/, ''));
     } catch (e) { return []; }
   }
 
+  // saved worlds owned by an account: scan room saves' meta.ownerId
+  function worldsByOwner(ownerId) {
+    const out = [];
+    for (const code of listRoomCodes()) {
+      const d = loadRoom(code);
+      if (d && d.meta && d.meta.ownerId === ownerId) {
+        out.push({ code, name: d.meta.name, savedAt: d.meta.saved || 0 });
+      }
+    }
+    return out.sort((a, b) => b.savedAt - a.savedAt);
+  }
+
   return {
     kind: 'file',
+    accountsEnabled: true,
     ready: () => Promise.resolve(),
     saveRoom,                              // synchronous
     loadRoom: (code) => Promise.resolve(loadRoom(code)),
     loadFile: (p) => Promise.resolve(loadFile(p)),
     listRoomCodes: () => Promise.resolve(listRoomCodes()),
+    worldsByOwner: (ownerId) => Promise.resolve(worldsByOwner(ownerId)),
     flush: () => Promise.resolve(),
     close: () => Promise.resolve(),
-    // account/world APIs are Postgres-only; file backend is single-world-per-file
-    accountsEnabled: false,
+
+    /* ---- accounts ---- */
+    getAccountByName(name) {
+      const a = loadAccounts();
+      const id = a.byName[String(name).toLowerCase()];
+      return Promise.resolve(id ? a.byId[id] : null);
+    },
+    getAccount(id) { return Promise.resolve(loadAccounts().byId[id] || null); },
+    createAccount(acct) {
+      const a = loadAccounts();
+      const key = acct.username.toLowerCase();
+      if (a.byName[key]) return Promise.resolve(null);   // taken
+      a.byId[acct.id] = acct; a.byName[key] = acct.id;
+      persistAccounts();
+      return Promise.resolve(acct);
+    },
+    updateAccount(id, patch) {
+      const a = loadAccounts();
+      if (a.byId[id]) { Object.assign(a.byId[id], patch); persistAccounts(); }
+      return Promise.resolve(a.byId[id] || null);
+    },
   };
 }
 

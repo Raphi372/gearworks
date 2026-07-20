@@ -64,10 +64,33 @@ production (and in CI/CD before a backend deploy) with `npm run db:migrate`.
   include automated backups). Snapshots are also self-contained JSON, so
   `SELECT snapshot FROM "World"` is a complete, restorable export.
 
+## Accounts & authentication
+
+Player accounts are **wired into gameplay** (both backends): register / log in /
+guest, with account-owned persistent worlds.
+
+- **Passwords** are hashed with **scrypt + a per-account random salt**
+  (`node:crypto`, no external auth dependency), stored as `saltHex:hashHex` in
+  `Account.passwordHash`. Verification is constant-time.
+- **Sessions** are stateless **HMAC-signed tokens** (`{aid,exp}` signed with
+  `AUTH_SECRET`). The client stores the token in `localStorage` and replays it
+  on connect for silent re-login. No server session table needed.
+- **Guests** get a persistent identity (token) with no password, so they can
+  own worlds immediately and upgrade later.
+- **World ownership**: a world created while signed in records `ownerId`.
+  Owners see their worlds under "My Worlds" and can **Resume** them; a private
+  saved world can only be resumed by its owner.
+
+Both storage backends implement the account API (`getAccountByName`,
+`getAccount`, `createAccount`, `updateAccount`, `worldsByOwner`): the file
+backend uses a JSON store (`accounts.json`), Postgres uses the Prisma models.
+
+> Set a stable **`AUTH_SECRET`** in production — see docs/PRODUCTION.md.
+
 ## Current status
 
-The schema, migration, adapter, and abstraction are **ready and validated**
-(`npx prisma validate` passes; CI checks it). Wiring accounts and world
-persistence into the lobby/gameplay is the next milestone (P2 in the
-[architecture review](ARCHITECTURE_REVIEW.md)) — the game currently persists
-room snapshots and runs anonymously.
+Schema, migration, adapter, abstraction, **and accounts + account-owned world
+persistence** are implemented and tested on both backends (`npx prisma
+validate` passes; headless auth/persistence + browser UI tests pass). Next
+milestones: cross-world progression/stats projections and OAuth/email
+recovery (P2+ in the [architecture review](ARCHITECTURE_REVIEW.md)).
