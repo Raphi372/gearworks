@@ -48,6 +48,12 @@ automatically on unknown paths.
 
 ## Backend — Fly.io (or Railway)
 
+> **Prefer $0/month with no paid hosting?** See
+> [FREE_DEPLOYMENT_GUIDE.md](FREE_DEPLOYMENT_GUIDE.md) — self-host the server on
+> your own machine behind a **Cloudflare Tunnel** (replaces Fly.io) with PM2 for
+> auto-restart, the client on Cloudflare Pages, and Neon's free Postgres. The
+> section below documents the managed Fly.io/Railway path instead.
+
 The server ships as a Docker image (`Dockerfile`, non-root, built-in
 healthcheck). `fly.toml` is preconfigured: single machine (all room state is
 in memory), persistent volume at `/data` for the file backend, `/health`

@@ -69,6 +69,7 @@ permission tiers.
 | [MULTIPLAYER.md](docs/MULTIPLAYER.md) | Protocol, determinism, security model |
 | [LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) | Run & test locally |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Cloudflare Pages + Fly.io + Postgres |
+| [FREE_DEPLOYMENT_GUIDE.md](docs/FREE_DEPLOYMENT_GUIDE.md) | **$0/month** self-host: Cloudflare Pages + Tunnel + Neon, step by step |
 | [DATABASE.md](docs/DATABASE.md) | Persistence backends & schema |
 | [PRODUCTION.md](docs/PRODUCTION.md) | Config, security, scaling, runbook |
 
@@ -77,6 +78,12 @@ permission tiers.
 The client deploys to **Cloudflare Pages** and the authoritative server to
 **Fly.io / Railway** (Docker), with optional **PostgreSQL** persistence — all
 via secret-gated GitHub Actions. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+**Want to run it publicly for $0/month?** The
+[Free Deployment Guide](docs/FREE_DEPLOYMENT_GUIDE.md) is a beginner-friendly,
+step-by-step walkthrough for self-hosting the server on your own machine behind a
+**Cloudflare Tunnel** (no Fly.io, no paid hosting, no credit card), with the
+client on Cloudflare Pages and an optional Neon PostgreSQL free-tier database.
 
 ## Controls
 

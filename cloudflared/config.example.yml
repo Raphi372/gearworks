@@ -1,0 +1,37 @@
+# ============================================================================
+# Cloudflare Tunnel config for exposing the self-hosted Gearworks server to the
+# whole internet, for free, with no open ports on your router and automatic
+# HTTPS/WSS. This replaces Fly.io. See docs/FREE_DEPLOYMENT_GUIDE.md (Phase 2).
+#
+# This file is for a NAMED tunnel (stable URL on a domain you've added to
+# Cloudflare). If you just want to test with zero setup, you don't need this
+# file at all — run a Quick Tunnel instead:
+#     cloudflared tunnel --url http://localhost:8080
+# (that prints a random https://<name>.trycloudflare.com URL each run).
+#
+# ---- One-time setup for a NAMED tunnel --------------------------------------
+#   cloudflared tunnel login                       # authorize in the browser
+#   cloudflared tunnel create gearworks            # prints a Tunnel UUID + creds
+#   cloudflared tunnel route dns gearworks play.YOURDOMAIN.com
+#   cp cloudflared/config.example.yml ~/.cloudflared/config.yml
+#   # edit the two placeholders below, then:
+#   cloudflared tunnel run gearworks
+# ============================================================================
+
+# The tunnel's UUID (from `cloudflared tunnel create gearworks`), or its name.
+tunnel: REPLACE_WITH_TUNNEL_UUID
+
+# Path to the credentials JSON that `create` wrote. On macOS this is usually:
+#   /Users/YOUR_MAC_USERNAME/.cloudflared/REPLACE_WITH_TUNNEL_UUID.json
+credentials-file: /Users/YOUR_MAC_USERNAME/.cloudflared/REPLACE_WITH_TUNNEL_UUID.json
+
+# Route rules are matched top-to-bottom. WebSocket upgrades are proxied
+# automatically — no extra config needed for wss://.
+ingress:
+  # Public hostname → your local Gearworks server. The client will connect to
+  # wss://play.YOURDOMAIN.com (Cloudflare terminates TLS at the edge).
+  - hostname: play.YOURDOMAIN.com
+    service: http://localhost:8080
+
+  # Everything else 404s. This catch-all is REQUIRED and must be last.
+  - service: http_status:404

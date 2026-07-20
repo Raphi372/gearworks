@@ -13,6 +13,29 @@ function flag(name, def) { const i = args.indexOf(name); return i >= 0 ? args[i 
 function envInt(name, def) { const v = parseInt(process.env[name], 10); return Number.isFinite(v) ? v : def; }
 
 const ROOT = path.resolve(__dirname, '..');
+
+// --- .env loader (zero-dependency) ------------------------------------------
+// Self-hosting on a laptop/box is far easier when secrets live in a gitignored
+// .env file than in shell exports that vanish on reboot. We parse a minimal
+// KEY=VALUE file (one pair per line, '#' comment lines, optional quotes) and
+// populate process.env WITHOUT overwriting anything already set by the real
+// environment (so Docker/CI/PM2 env always wins). No dependency is added — the
+// runtime stays install-free. Put each value on its own line; inline comments
+// after a value are treated as part of the value, so avoid them.
+(function loadDotenv() {
+  try {
+    const raw = require('fs').readFileSync(path.join(ROOT, '.env'), 'utf8');
+    for (const line of raw.split('\n')) {
+      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+      if (!m) continue;                                   // blank / comment / malformed
+      let val = m[2];
+      if (val.length >= 2 && ((val[0] === '"' && val.endsWith('"')) || (val[0] === "'" && val.endsWith("'"))))
+        val = val.slice(1, -1);
+      if (process.env[m[1]] === undefined) process.env[m[1]] = val;
+    }
+  } catch (e) { /* no .env present — that's fine */ }
+})();
+
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 const config = {
