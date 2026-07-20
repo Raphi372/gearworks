@@ -7,6 +7,11 @@ plain HTML/JS on the client and a zero-dependency Node server.
 
 ## Play
 
+**In your browser right now:**
+**https://raphi372.github.io/gearworks/** — the singleplayer client,
+deployed from `main` by GitHub Actions. Runs entirely client-side; saves
+live in your browser.
+
 **Singleplayer (offline):** open `index.html` in any modern browser
 (Safari on iPad, Chrome, Edge, Firefox). That's it.
 
@@ -20,6 +25,11 @@ Open the URL, pick **Multiplayer**, create a game, and share the 6-letter
 invite code (or let friends find it in the public room browser). Supports
 8–16 players per room, spectators, reconnection, and host/admin/player
 permission tiers.
+
+> Note: the GitHub Pages site can also join multiplayer games, but because
+> it is served over HTTPS the browser requires a `wss://` (TLS) server
+> address — put your TLS-terminated server (see docs) in the lobby's
+> Server field. Plain `ws://localhost` servers work from a local checkout.
 
 ## Features
 
