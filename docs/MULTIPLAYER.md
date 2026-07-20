@@ -24,7 +24,7 @@ would drown any connection; replicating *commands* costs bytes).
 | Path | Role |
 |---|---|
 | `shared/core.js` | Deterministic simulation core (world gen, entities, belts, fluids, power, economy, research, NPC state, **Command system**, snapshots, state hash). UMD: loads in browser and Node. |
-| `server/server.js` | Dedicated server. **Zero npm dependencies** — HTTP static serving + an inline RFC 6455 WebSocket implementation. Rooms, tick loop, validation, saves, permissions. |
+| `server/` | Dedicated server. **Zero required dependencies** — inline RFC 6455 WebSocket + HTTP static serving. Modular: `network/` (transport, HTTP), `simulation/room.js` (authoritative tick loop, validation), `players/` (sessions, lobby), `world/registry.js` (rooms), `database/` (file default \| optional Postgres). See [ARCHITECTURE.md](ARCHITECTURE.md). |
 | `client/game.js` | Rendering, input (mouse + multitouch), UI/HUD, audio, particles, blueprints, and the game controller that turns player intent into commands. |
 | `client/net.js` | Networking layer: `LocalSession` (singleplayer) and `NetSession` (multiplayer) with identical interfaces. |
 | `index.html` | Client shell: CSS, DOM, main menu, lobby, reconnect dialog. Still works fully offline (`file://`) for singleplayer. |

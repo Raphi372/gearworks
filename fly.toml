@@ -1,0 +1,49 @@
+# ============================================================================
+# Fly.io deployment for the Gearworks authoritative game server.
+# One app process holds all room state in memory, so we pin to a single
+# machine (auto_stop keeps costs near zero when idle; it wakes on connect).
+# For horizontal scale, see docs/PRODUCTION.md (sticky room routing).
+#   fly launch --no-deploy   # first time: creates the app + volume
+#   fly deploy               # or let CI do it (.github/workflows/backend-deploy.yml)
+# ============================================================================
+app = "gearworks-server"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+  STORAGE = "file"
+  SAVE_DIR = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 400
+    soft_limit = 350
+
+  # WebSocket upgrades ride the same HTTP service; Fly proxies them transparently.
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "4s"
+    grace_period = "10s"
+    method = "get"
+    path = "/health"
+
+# Persistent volume for the file save backend (survives restarts/deploys).
+# For the Postgres backend this can be removed (state lives in the database).
+[mounts]
+  source = "gearworks_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

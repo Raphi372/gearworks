@@ -1,0 +1,30 @@
+name: Validate & Test
+
+# Runs on every push and PR. No external services, no secrets — always runs.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # The server has no required runtime deps; install is fast (optional prisma only).
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Static validation (syntax, determinism, module graph, CSP)
+        run: npm run validate
+      - name: Integration tests (authority, snapshots, persistence, chat)
+        run: npm test
+      - name: Prisma schema check
+        run: npx prisma validate --schema prisma/schema.prisma
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/gearworks
+      - name: Build client bundle
+        run: npm run build:client

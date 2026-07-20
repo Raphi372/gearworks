@@ -1,4 +1,20 @@
 # Gearworks server saves
 saves/
 saves-test/
+
+# dependencies & build output
 node_modules/
+dist/
+
+# prisma generated client
+prisma/generated/
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# misc
+.wrangler/
+*.log
+.DS_Store

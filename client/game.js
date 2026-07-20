@@ -1372,6 +1372,7 @@ var Game = (function () {
     document.getElementById('btn-undo').onclick = undo;
     document.getElementById('btn-redo').onclick = redo;
     document.getElementById('btn-delete').onclick = toggleDelete;
+    document.getElementById('sel-close').onclick = clearSelection;   // was an inline onclick (removed for CSP)
     document.getElementById('buildbar').addEventListener('click', function (e) {
       var cat = e.target.closest('[data-cat]'); if (cat) { UI.buildCat = cat.dataset.cat; UI.buildBar(); return; }
       var t = e.target.closest('[data-tool]'); if (t) selectTool(t.dataset.tool);

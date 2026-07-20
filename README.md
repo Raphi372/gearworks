@@ -53,14 +53,30 @@ permission tiers.
 |---|---|
 | `index.html` | Client shell: CSS, DOM, menu/lobby/reconnect UI |
 | `shared/core.js` | Deterministic simulation core (browser + Node) |
-| `client/game.js` | Rendering, input, UI, audio, game controller |
-| `client/net.js` | Networking layer (local + networked sessions) |
-| `server/server.js` | Zero-dependency dedicated server |
-| `docs/MULTIPLAYER.md` | Architecture, protocol, deployment, testing |
+| `client/game.js` · `client/net.js` | Rendering/UI/input · networking (local + networked sessions) |
+| `server/` | Modular authoritative server — `network/`, `simulation/`, `players/`, `world/`, `database/` |
+| `prisma/` | Optional Postgres schema + migrations |
+| `public/` | Cloudflare Pages edge config (`_headers`, `_redirects`, `404.html`) |
+| `scripts/` | `validate`, `test`, `build:client` |
+| `docs/` | Architecture, deployment, database, production, multiplayer |
 
-See **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)** for the full architecture
-write-up, protocol reference, dedicated-server deployment (systemd example),
-and multi-client testing instructions.
+## Documentation
+
+| Doc | What |
+|---|---|
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the three layers fit together |
+| [ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md) | Audit, technical debt, roadmap |
+| [MULTIPLAYER.md](docs/MULTIPLAYER.md) | Protocol, determinism, security model |
+| [LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) | Run & test locally |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Cloudflare Pages + Fly.io + Postgres |
+| [DATABASE.md](docs/DATABASE.md) | Persistence backends & schema |
+| [PRODUCTION.md](docs/PRODUCTION.md) | Config, security, scaling, runbook |
+
+## Production deployment
+
+The client deploys to **Cloudflare Pages** and the authoritative server to
+**Fly.io / Railway** (Docker), with optional **PostgreSQL** persistence — all
+via secret-gated GitHub Actions. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Controls
 

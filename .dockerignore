@@ -1,0 +1,11 @@
+.git
+.github
+node_modules
+saves
+saves-test
+dist
+*.md
+!docs/*.md
+.env
+.env.*
+npm-debug.log

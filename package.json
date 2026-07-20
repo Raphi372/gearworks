@@ -1,0 +1,34 @@
+{
+  "name": "gearworks",
+  "version": "1.0.0",
+  "description": "Factorio-inspired browser factory game with server-authoritative deterministic-lockstep multiplayer.",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "gearworks-server": "server/server.js"
+  },
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js --port 8080",
+    "validate": "node scripts/validate.js",
+    "test": "node scripts/test.js",
+    "build:client": "node scripts/build-client.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:studio": "prisma studio"
+  },
+  "optionalDependencies": {
+    "@prisma/client": "^5.22.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Raphi372/gearworks"
+  }
+}
