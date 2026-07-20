@@ -1,0 +1,50 @@
+name: Deploy backend (Fly.io)
+
+# Deploys the authoritative game server to Fly.io on every push to main —
+# but only once the FLY_API_TOKEN secret exists, so the repo is safe to fork
+# and this is a no-op until you connect your Fly account.
+#
+# Setup (one time):
+#   1. fly launch --no-deploy      # creates the app + volume from fly.toml
+#   2. Add repo secret FLY_API_TOKEN   (fly tokens create deploy)
+on:
+  push:
+    branches: [main]
+    paths: ['server/**', 'shared/**', 'prisma/**', 'Dockerfile', 'fly.toml', 'package.json']
+  workflow_dispatch:
+
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        run: echo "enabled=${{ secrets.FLY_API_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+
+  # Validate before shipping — never deploy a red build.
+  test:
+    needs: guard
+    if: needs.guard.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-audit --no-fund
+      - run: npm run validate && npm test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

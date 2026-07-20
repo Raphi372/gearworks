@@ -1,0 +1,118 @@
+// ============================================================================
+// Gearworks — Prisma schema (PostgreSQL)
+// Used only when STORAGE=postgres. The default file backend needs none of this.
+// Generate client:  npm run db:generate
+// Apply migrations:  npm run db:migrate         (production)
+//                    npm run db:migrate:dev     (local, creates migrations)
+// See docs/DATABASE.md.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---- Accounts: optional player identity for the persistent metagame --------
+model Account {
+  id           String   @id @default(cuid())
+  email        String?  @unique
+  displayName  String
+  color        String   @default("#4aa3ff")
+  passwordHash String? // null for guest / OAuth-only accounts
+  createdAt    DateTime @default(now())
+  lastSeenAt   DateTime @default(now())
+
+  worlds       World[]      @relation("OwnedWorlds")
+  memberships  WorldMember[]
+  progression  Progression?
+  stats        Stat[]
+
+  @@index([lastSeenAt])
+}
+
+// ---- Worlds: an authoritative saved game (one room) ------------------------
+// `snapshot` is the shared/core.js Snapshot.capture() blob — the same format
+// the file backend stores. Stored as JSONB so it is queryable if needed.
+model World {
+  id         String   @id @default(cuid())
+  code       String   @unique          // 6-char invite code
+  name       String
+  seed       BigInt?
+  snapshot   Json                        // deterministic sim snapshot
+  isPublic   Boolean  @default(true)
+  savedAt    DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  ownerId    String?
+  owner      Account? @relation("OwnedWorlds", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  members    WorldMember[]
+  factories  Factory[]
+
+  @@index([isPublic, savedAt])
+  @@index([ownerId])
+}
+
+// ---- Membership + role in a world (host/admin/player/spectator) ------------
+model WorldMember {
+  id        String   @id @default(cuid())
+  role      Role     @default(PLAYER)
+  joinedAt  DateTime @default(now())
+
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  worldId   String
+  world     World    @relation(fields: [worldId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, worldId])
+  @@index([worldId])
+}
+
+enum Role {
+  HOST
+  ADMIN
+  PLAYER
+  SPECTATOR
+}
+
+// ---- Factories: denormalized per-world production summary ------------------
+// The authoritative truth is inside World.snapshot; this table is an indexed
+// projection for leaderboards / analytics without deserializing snapshots.
+model Factory {
+  id          String   @id @default(cuid())
+  worldId     String
+  world       World    @relation(fields: [worldId], references: [id], onDelete: Cascade)
+  entityCount Int      @default(0)
+  money       Int      @default(0)
+  techTier    Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@index([worldId])
+}
+
+// ---- Progression: cross-world account progression --------------------------
+model Progression {
+  id            String   @id @default(cuid())
+  accountId     String   @unique
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  level         Int      @default(1)
+  xp            Int      @default(0)
+  unlockedTech  String[] @default([])
+  updatedAt     DateTime @updatedAt
+}
+
+// ---- Stats: time-series counters (production, playtime, …) -----------------
+model Stat {
+  id         String   @id @default(cuid())
+  accountId  String
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  key        String                       // e.g. "iron_plate_produced", "playtime_sec"
+  value      BigInt   @default(0)
+  recordedAt DateTime @default(now())
+
+  @@index([accountId, key])
+}

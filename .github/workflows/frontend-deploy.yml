@@ -1,0 +1,45 @@
+name: Deploy frontend (Cloudflare Pages)
+
+# Builds the static client and deploys it to Cloudflare Pages on every push to
+# main — gated on the Cloudflare secrets so it's a no-op until you connect an
+# account. This is the production frontend; the GitHub Pages workflow
+# (pages.yml) remains as a zero-config preview.
+#
+# Setup (one time):
+#   1. Create a Cloudflare Pages project named "gearworks"
+#   2. Add repo secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+on:
+  push:
+    branches: [main]
+    paths: ['index.html', 'client/**', 'shared/**', 'docs/**', 'public/**', 'scripts/build-client.js']
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-deploy
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        run: echo "enabled=${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: guard
+    if: needs.guard.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Build client
+        run: node scripts/build-client.js
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=gearworks --branch=main
