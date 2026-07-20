@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Gearworks — Factory Empire</title>
+<style>
+/* ============================================================
+   GEARWORKS — client shell
+   Layout, HUD, panels, buttons, minimap, toasts, and the
+   multiplayer chrome: main menu, lobby, player list, reconnect.
+   Game logic lives in shared/core.js + client/game.js + client/net.js.
+   ============================================================ */
+* { margin:0; padding:0; box-sizing:border-box; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; }
+html,body { width:100%; height:100%; overflow:hidden; background:#0b0f14; color:#dce3ea;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  touch-action:none; overscroll-behavior:none; }
+#game { position:fixed; inset:0; display:block; }
+/* only the full-screen game layers are absolutely stacked — UI canvases
+   (tool icons, graphs, blueprint previews) must stay in normal flow */
+#game canvas { display:block; position:absolute; inset:0; }
+
+.panel { position:absolute; background:rgba(18,24,32,0.92); border:1px solid #2b3947;
+  border-radius:10px; box-shadow:0 6px 24px rgba(0,0,0,0.45); backdrop-filter:blur(6px); }
+.panel h3 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#7d93a8;
+  padding:8px 10px; border-bottom:1px solid #223040; display:flex; justify-content:space-between; align-items:center; }
+.hidden { display:none !important; }
+
+#topbar { top:8px; left:50%; transform:translateX(-50%); display:flex; gap:2px; padding:5px 6px;
+  max-width:96vw; overflow-x:auto; align-items:center; z-index:20; }
+#topbar .res { display:flex; align-items:center; gap:4px; padding:3px 7px; border-radius:6px;
+  font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+#topbar .res .ic { width:12px; height:12px; border-radius:3px; }
+#topbar .res b { color:#fff; font-weight:600; }
+#money { color:#7CFC9E; font-weight:700; }
+#power { color:#ffd873; }
+.netdot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+.netdot.on { background:#7CFC9E; } .netdot.warn { background:#ffd873; } .netdot.off { background:#ff7a7a; }
+
+#buildbar { bottom:8px; left:50%; transform:translateX(-50%); display:flex; gap:4px;
+  padding:6px; max-width:97vw; overflow-x:auto; z-index:20; }
+.tool { min-width:56px; height:56px; border-radius:9px; background:#1a232e; border:1px solid #2b3947;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  cursor:pointer; padding:4px 6px; transition:transform .06s, background .1s; flex-shrink:0; }
+.tool:active { transform:scale(0.93); }
+.tool.sel { background:#26506e; border-color:#4aa3ff; box-shadow:0 0 0 1px #4aa3ff inset; }
+.tool.locked { opacity:.35; }
+.tool .gi { width:26px; height:26px; }
+.tool .nm { font-size:9px; color:#9fb2c4; text-align:center; line-height:1.05; }
+.tool .ct { font-size:8px; color:#7CFC9E; }
+
+#sidebtns { position:absolute; right:8px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:6px; z-index:20; }
+.iconbtn { width:44px; height:44px; border-radius:10px; background:rgba(18,24,32,0.92); border:1px solid #2b3947;
+  color:#c3d3e2; font-size:18px; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.iconbtn:active { transform:scale(0.92); }
+.iconbtn.on { background:#26506e; border-color:#4aa3ff; }
+
+#edittools { position:absolute; left:8px; bottom:74px; display:flex; flex-direction:column; gap:6px; z-index:20; }
+
+#minimap { right:8px; top:8px; width:150px; height:150px; z-index:15; padding:0; overflow:hidden; }
+#minimap canvas { position:absolute; inset:0; }
+
+.modal { top:50%; left:50%; transform:translate(-50%,-50%); width:min(560px,94vw); max-height:86vh;
+  overflow:hidden; display:flex; flex-direction:column; z-index:40; }
+.modal .body { overflow-y:auto; padding:12px; }
+.closex { cursor:pointer; color:#8aa; font-size:16px; padding:0 4px; }
+.tech { display:flex; gap:8px; padding:8px; border:1px solid #263340; border-radius:8px; margin-bottom:8px; background:#141b23; }
+.tech .ti { flex:1; }
+.tech .tn { font-weight:600; font-size:13px; }
+.tech .td { font-size:11px; color:#93a6b8; margin:2px 0; }
+.tech .tc { font-size:11px; color:#ffd873; }
+.tech button { align-self:center; }
+button.btn { background:#26506e; color:#fff; border:1px solid #4aa3ff; border-radius:7px;
+  padding:7px 12px; font-size:12px; cursor:pointer; font-weight:600; }
+button.btn:active { transform:scale(0.95); }
+button.btn:disabled { opacity:.4; cursor:default; }
+button.btn.gray { background:#26323e; border-color:#3a4c5e; }
+button.btn.red { background:#6a2a2a; border-color:#a44; }
+input.txt, select.txt { background:#1a232e; border:1px solid #345; border-radius:6px; color:#dce3ea; padding:7px 9px; font-size:13px; }
+
+.statrow { display:flex; justify-content:space-between; padding:4px 2px; font-size:12px; border-bottom:1px solid #1c2731; align-items:center; }
+.statrow span:last-child { color:#fff; font-variant-numeric:tabular-nums; }
+.graphwrap { margin:8px 0; }
+.graphwrap .lbl { font-size:11px; color:#8aa; margin-bottom:3px; }
+
+#toasts { position:absolute; left:50%; transform:translateX(-50%); top:56px; z-index:60;
+  display:flex; flex-direction:column; gap:5px; align-items:center; pointer-events:none; }
+.toast { background:rgba(20,28,38,0.95); border:1px solid #2b3947; border-left:3px solid #4aa3ff;
+  border-radius:7px; padding:7px 12px; font-size:12px; max-width:80vw; animation:tin .25s ease; }
+.toast.good { border-left-color:#7CFC9E; } .toast.warn { border-left-color:#ffd873; } .toast.bad { border-left-color:#ff7a7a; }
+@keyframes tin { from{opacity:0; transform:translateY(-8px);} to{opacity:1; transform:none;} }
+
+#selinfo { left:8px; top:8px; width:210px; z-index:18; padding:0; }
+#selinfo .body { padding:8px 10px; font-size:12px; }
+#selinfo .body .k { color:#8aa; }
+.bar { height:6px; background:#20303f; border-radius:3px; overflow:hidden; margin-top:3px; }
+.bar > i { display:block; height:100%; background:#4aa3ff; }
+
+.reclist { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+.recopt { border:1px solid #2b3947; border-radius:6px; padding:4px; cursor:pointer; font-size:9px; text-align:center; width:46px; }
+.recopt.sel { border-color:#4aa3ff; background:#26506e; }
+
+#hint { position:absolute; bottom:74px; left:50%; transform:translateX(-50%); z-index:14;
+  font-size:11px; color:#7d93a8; background:rgba(12,16,22,0.7); padding:4px 10px; border-radius:20px; pointer-events:none; }
+.slider { width:100%; }
+label.row { display:flex; justify-content:space-between; align-items:center; font-size:12px; padding:6px 0; gap:10px; }
+#loadingscr { position:fixed; inset:0; background:#0b0f14; z-index:200; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:14px; }
+#loadingscr h1, .biglogo { font-size:28px; letter-spacing:.15em; color:#4aa3ff; font-weight:800; }
+#loadingscr p { color:#7d93a8; font-size:13px; }
+.tab { display:inline-block; padding:5px 10px; font-size:12px; cursor:pointer; color:#8aa; border-bottom:2px solid transparent; }
+.tab.sel { color:#fff; border-color:#4aa3ff; }
+
+/* ---- full-screen overlays: main menu / lobby / reconnect ---- */
+.screen { position:fixed; inset:0; z-index:150; background:radial-gradient(ellipse at 50% 30%, #12202e 0%, #0b0f14 70%);
+  display:flex; align-items:center; justify-content:center; }
+.screen .card { width:min(520px, 94vw); max-height:92vh; overflow-y:auto; background:rgba(16,22,30,0.96);
+  border:1px solid #2b3947; border-radius:14px; padding:22px; box-shadow:0 12px 48px rgba(0,0,0,0.6); }
+.menubtn { display:block; width:100%; margin:8px 0; padding:13px; font-size:15px; font-weight:700;
+  background:#1c2a38; color:#dce3ea; border:1px solid #2f4256; border-radius:10px; cursor:pointer; text-align:left; }
+.menubtn:hover { background:#26506e; border-color:#4aa3ff; }
+.menubtn small { display:block; font-weight:400; font-size:11px; color:#8aa; margin-top:2px; }
+.formrow { display:flex; gap:8px; align-items:center; margin:8px 0; flex-wrap:wrap; }
+.formrow label { font-size:12px; color:#9fb2c4; min-width:90px; }
+.swatches { display:flex; gap:6px; }
+.swatch { width:26px; height:26px; border-radius:50%; cursor:pointer; border:2px solid transparent; }
+.swatch.sel { border-color:#fff; }
+.roomrow { display:flex; justify-content:space-between; align-items:center; padding:9px 10px;
+  border:1px solid #263340; border-radius:8px; margin-bottom:6px; background:#141b23; }
+.roomrow .rn { font-weight:600; font-size:13px; }
+.roomrow .rd { font-size:11px; color:#8aa; }
+.plrow { display:flex; align-items:center; gap:8px; padding:7px 4px; border-bottom:1px solid #1c2731; font-size:13px; }
+.avatar { width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:800; color:#0b0f14; flex-shrink:0; }
+.rolebadge { font-size:9px; text-transform:uppercase; letter-spacing:.06em; padding:2px 6px; border-radius:4px;
+  background:#26323e; color:#9fb2c4; }
+.rolebadge.host { background:#4a3a10; color:#ffd873; }
+.rolebadge.admin { background:#1e3a52; color:#4aa3ff; }
+.rolebadge.spectator { background:#222; color:#888; }
+#invitecode { font-size:22px; letter-spacing:.35em; font-weight:800; color:#7CFC9E; text-align:center;
+  background:#10161e; border:1px dashed #2b3947; border-radius:8px; padding:8px; margin:8px 0; cursor:pointer; }
+.divider { border-top:1px solid #223040; margin:14px 0; }
+.errline { color:#ff7a7a; font-size:12px; min-height:16px; margin-top:6px; }
+</style>
+</head>
+<body>
+<div id="game">
+  <canvas id="world"></canvas>
+  <canvas id="fx"></canvas>
+</div>
+
+<div id="loadingscr"><h1>GEARWORKS</h1><p>Loading…</p></div>
+
+<!-- ======================= MAIN MENU ======================= -->
+<div id="mainmenu" class="screen hidden"><div class="card">
+  <div class="biglogo" style="text-align:center;margin-bottom:4px">GEARWORKS</div>
+  <p style="text-align:center;color:#7d93a8;font-size:12px;margin-bottom:16px">Factory Empire — solo &amp; co-op</p>
+  <button class="menubtn" id="mm-continue">▶ Continue<small>Resume your local singleplayer world</small></button>
+  <button class="menubtn" id="mm-new">✚ New Singleplayer World<small>Fresh procedural world, simulated locally</small></button>
+  <button class="menubtn" id="mm-multi">🌐 Multiplayer<small>Co-op factories on a dedicated server</small></button>
+</div></div>
+
+<!-- ======================= LOBBY ======================= -->
+<div id="lobby" class="screen hidden"><div class="card">
+  <h3 style="border:none;padding:0 0 10px 0">Multiplayer <span class="closex" id="lb-back">✕</span></h3>
+  <div class="formrow"><label>Your name</label><input class="txt" id="lb-name" maxlength="20" placeholder="Engineer" style="flex:1"></div>
+  <div class="formrow"><label>Color</label><div class="swatches" id="lb-colors"></div></div>
+  <div class="formrow"><label>Server</label><input class="txt" id="lb-server" style="flex:1" placeholder="ws://localhost:8080"></div>
+  <div class="formrow"><label></label><label style="min-width:0"><input type="checkbox" id="lb-spectate"> Join as spectator</label></div>
+  <div class="divider"></div>
+  <div id="lb-rooms-wrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <b style="font-size:13px">Public games</b>
+      <button class="btn gray" id="lb-refresh">↻ Refresh</button>
+    </div>
+    <div id="lb-rooms"><p style="color:#667;font-size:12px">Connect to see games…</p></div>
+  </div>
+  <div class="divider"></div>
+  <div class="formrow"><label>Invite code</label><input class="txt" id="lb-code" maxlength="6" placeholder="ABC123" style="width:110px;text-transform:uppercase"><button class="btn" id="lb-join">Join</button></div>
+  <div class="divider"></div>
+  <b style="font-size:13px">Host a new game</b>
+  <div class="formrow"><label>Room name</label><input class="txt" id="lb-roomname" maxlength="40" placeholder="My Factory World" style="flex:1"></div>
+  <div class="formrow"><label>Max players</label><input class="txt" id="lb-max" type="number" min="2" max="16" value="8" style="width:70px">
+    <label style="min-width:0"><input type="checkbox" id="lb-public" checked> Public</label></div>
+  <button class="btn" id="lb-create" style="width:100%;margin-top:4px">Create Game</button>
+  <div class="errline" id="lb-err"></div>
+</div></div>
+
+<!-- ======================= RECONNECT ======================= -->
+<div id="reconn" class="screen hidden"><div class="card" style="text-align:center">
+  <h3 style="border:none;justify-content:center">Connection lost</h3>
+  <p id="reconn-msg" style="color:#9fb2c4;font-size:13px;margin:12px 0">Reconnecting…</p>
+  <button class="btn red" id="reconn-leave">Leave game</button>
+</div></div>
+
+<div id="topbar" class="panel"></div>
+
+<div id="selinfo" class="panel hidden"><h3><span id="selttl">Selection</span><span class="closex" onclick="Game.clearSelection()">✕</span></h3><div class="body" id="selbody"></div></div>
+
+<div id="minimap" class="panel"><canvas id="mmcanvas" width="150" height="150"></canvas></div>
+
+<div id="sidebtns">
+  <div class="iconbtn" id="btn-build" title="Build">🏗️</div>
+  <div class="iconbtn" id="btn-blueprints" title="Blueprints (B)">📐</div>
+  <div class="iconbtn" id="btn-research" title="Research">🔬</div>
+  <div class="iconbtn" id="btn-market" title="Market">💹</div>
+  <div class="iconbtn" id="btn-stats" title="Statistics">📊</div>
+  <div class="iconbtn hidden" id="btn-players" title="Players">👥</div>
+  <div class="iconbtn" id="btn-settings" title="Settings">⚙️</div>
+</div>
+
+<div id="edittools">
+  <div class="iconbtn" id="btn-rotate" title="Rotate (R)">↻</div>
+  <div class="iconbtn" id="btn-copy" title="Copy (C)">⧉</div>
+  <div class="iconbtn" id="btn-undo" title="Undo (Z)">⤺</div>
+  <div class="iconbtn" id="btn-redo" title="Redo (Y)">⤻</div>
+  <div class="iconbtn" id="btn-delete" title="Delete mode (X)">🗑️</div>
+</div>
+
+<div id="hint">Drag to pan • Pinch/scroll to zoom • Tap a tool then tap the map</div>
+
+<div id="buildbar" class="panel"></div>
+
+<div id="toasts"></div>
+
+<!-- Modals -->
+<div id="researchModal" class="panel modal hidden"><h3>Research Lab<span class="closex" data-close>✕</span></h3><div class="body" id="researchBody"></div></div>
+<div id="marketModal" class="panel modal hidden"><h3>Market<span class="closex" data-close>✕</span></h3><div class="body" id="marketBody"></div></div>
+<div id="statsModal" class="panel modal hidden"><h3>Statistics<span class="closex" data-close>✕</span></h3><div class="body" id="statsBody"></div></div>
+<div id="settingsModal" class="panel modal hidden"><h3>Settings<span class="closex" data-close>✕</span></h3><div class="body" id="settingsBody"></div></div>
+<div id="blueprintModal" class="panel modal hidden"><h3>Blueprint Library<span class="closex" data-close>✕</span></h3><div class="body" id="blueprintBody"></div></div>
+<div id="playersModal" class="panel modal hidden"><h3>Players<span class="closex" data-close>✕</span></h3><div class="body" id="playersBody"></div></div>
+
+<script src="shared/core.js"></script>
+<script src="client/net.js"></script>
+<script src="client/game.js"></script>
+</body>
+</html>
