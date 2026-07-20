@@ -1,0 +1,49 @@
+name: Deploy singleplayer client to GitHub Pages
+
+# Publishes the browser client (singleplayer runs entirely client-side).
+# Multiplayer from the published page requires connecting to your own
+# dedicated server over wss:// — see docs/MULTIPLAYER.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble static site (client files only)
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp -r shared client docs _site/
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          # creates the Pages site on first run so no manual settings step is needed
+          enablement: true
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
