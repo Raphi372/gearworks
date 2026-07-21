@@ -69,6 +69,16 @@ const config = {
   LOGIN_MAX_ATTEMPTS: envInt('LOGIN_MAX_ATTEMPTS', 8),   // per username per 15 min
   MAINTENANCE: process.env.MAINTENANCE === '1',    // reject new games with a notice
 
+  // account recovery (password reset / email verification)
+  RESET_TTL_MIN: envInt('RESET_TTL_MIN', 45),      // reset/verify token lifetime
+  // mail: zero-dependency. 'resend' uses the HTTP API; 'capture' writes JSONL
+  // (tests); default 'log' sends nothing (dev logs the body, prod stays quiet).
+  MAIL_PROVIDER: (process.env.MAIL_PROVIDER || (process.env.MAIL_CAPTURE_FILE ? 'capture' : 'log')).toLowerCase(),
+  MAIL_API_KEY: process.env.MAIL_API_KEY || '',
+  MAIL_FROM: process.env.MAIL_FROM || 'Gearworks <onboarding@resend.dev>',
+  MAIL_CAPTURE_FILE: process.env.MAIL_CAPTURE_FILE || '',
+  APP_URL: process.env.APP_URL || '',              // used to build reset links in email
+
   PROTO: Core.PROTO,
   VERSION: process.env.GIT_SHA || 'dev',
 };

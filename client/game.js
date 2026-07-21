@@ -1543,6 +1543,9 @@ var Lobby = (function () {
   var account = null;         // { id, username, color, guest } or null
   var authToken = null;       // persisted session token
   var authTab = 'guest';      // guest | login | register
+  var forgotOpen = false;     // password-reset sub-form visible
+  var resetPrefill = null;    // reset token from an emailed link (?reset=)
+  var pendingVerify = null;   // verify token from an emailed link (?verify=)
 
   function el(id) { return document.getElementById(id); }
   function esc(s) { return UI.esc(s); }
@@ -1567,6 +1570,12 @@ var Lobby = (function () {
       }
       if (prefs.server) el('lb-server').value = prefs.server;
       authToken = localStorage.getItem('gearworks_token') || null;
+    } catch (e) {}
+    // emailed recovery links land back here as ?reset=<code> / ?verify=<code>
+    try {
+      var qs = new URLSearchParams(location.search || '');
+      if (qs.get('reset')) { resetPrefill = qs.get('reset'); forgotOpen = true; authTab = 'login'; }
+      if (qs.get('verify')) pendingVerify = qs.get('verify');
     } catch (e) {}
     if (!el('lb-server').value) {
       // Priority: a build-injected backend (Cloudflare Pages → your tunnel),
@@ -1624,12 +1633,32 @@ var Lobby = (function () {
   function renderAccount() {
     var host = el('lb-account');
     if (account) {
+      var eh = '';
+      if (!account.guest) {
+        eh = '<div class="acc-email">' +
+          (account.email
+            ? 'Email: <b>' + esc(account.email) + '</b> ' + (account.emailVerified
+                ? '<span style="color:#7CFC9E">✓ verified</span>'
+                : '<span style="color:#ffd873">unverified</span>')
+            : '<span style="color:#8aa">Add an email so you can recover your password.</span>') +
+          '<div style="display:flex;gap:6px;margin-top:6px">' +
+            '<input class="txt" id="acc-email" placeholder="you@example.com" style="flex:1;margin:0" maxlength="200" autocomplete="email">' +
+            '<button class="btn gray" id="acc-email-save">' + (account.email ? 'Change' : 'Add') + '</button></div>' +
+          (account.email && !account.emailVerified
+            ? '<div style="display:flex;gap:6px;margin-top:6px">' +
+                '<input class="txt" id="acc-verify" placeholder="verification code from email" style="flex:1;margin:0">' +
+                '<button class="btn gray" id="acc-verify-go">Verify</button></div>'
+            : '') +
+          '<div class="acc-err" id="acc-err"></div></div>';
+      }
       host.innerHTML = '<div class="acc-signed"><span class="avatar" style="background:' + account.color + '">' +
         esc((account.username || '?').charAt(0).toUpperCase()) + '</span>' +
         '<span style="flex:1">Signed in as <b>' + esc(account.username) + '</b>' + (account.guest ? ' <span style="color:#8aa">(guest)</span>' : '') + '</span>' +
         '<button class="btn gray" id="acc-logout">Log out</button></div>' +
-        '<div class="acc-guest">Your worlds are saved to this account and appear below.</div>';
+        '<div class="acc-guest">Your worlds are saved to this account and appear below.</div>' + eh;
       el('acc-logout').onclick = logout;
+      var es = el('acc-email-save'); if (es) es.onclick = doSetEmail;
+      var vg = el('acc-verify-go'); if (vg) vg.onclick = doVerify;
       // identity comes from the account now
       el('lb-name').value = account.username; el('lb-name').disabled = true;
     } else {
@@ -1645,7 +1674,17 @@ var Lobby = (function () {
       } else {
         h += '<input class="txt" id="acc-user" placeholder="username" maxlength="20" autocomplete="username">' +
           '<input class="txt" id="acc-pass" type="password" placeholder="password (8+ chars)" maxlength="200" autocomplete="' + (t === 'register' ? 'new-password' : 'current-password') + '">' +
-          '<button class="btn" id="acc-go" style="width:100%;margin-top:4px">' + (t === 'register' ? 'Create account' : 'Log in') + '</button>';
+          '<button class="btn" id="acc-go" style="width:100%;margin-top:4px">' + (t === 'register' ? 'Create account' : 'Log in') + '</button>' +
+          (t === 'login' ? '<div class="acc-forgot" style="text-align:center;margin-top:6px"><a href="#" id="acc-forgot" style="color:#8aa;font-size:12px">Forgot password?</a></div>' : '');
+      }
+      if (forgotOpen || resetPrefill) {
+        h += '<div class="acc-reset" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)">' +
+          '<div style="font-size:11px;color:#8aa;margin-bottom:4px">Reset your password</div>' +
+          '<input class="txt" id="acc-rid" placeholder="your email or username">' +
+          '<button class="btn gray" id="acc-sendreset" style="width:100%;margin-bottom:8px">Email me a reset code</button>' +
+          '<input class="txt" id="acc-rtoken" placeholder="reset code from email"' + (resetPrefill ? ' value="' + esc(resetPrefill) + '"' : '') + '>' +
+          '<input class="txt" id="acc-rpass" type="password" placeholder="new password (8+ chars)" maxlength="200">' +
+          '<button class="btn" id="acc-doreset" style="width:100%">Set new password</button></div>';
       }
       h += '<div class="acc-err" id="acc-err"></div>';
       host.innerHTML = h;
@@ -1654,6 +1693,9 @@ var Lobby = (function () {
       });
       el('acc-go').onclick = doAuth;
       var pass = el('acc-pass'); if (pass) pass.onkeydown = function (e) { if (e.key === 'Enter') doAuth(); };
+      var fl = el('acc-forgot'); if (fl) fl.onclick = function (e) { e.preventDefault(); forgotOpen = !forgotOpen; renderAccount(); };
+      var sr = el('acc-sendreset'); if (sr) sr.onclick = doSendReset;
+      var dr = el('acc-doreset'); if (dr) dr.onclick = doReset;
     }
   }
 
@@ -1672,13 +1714,54 @@ var Lobby = (function () {
     }
   }
 
+  function doSendReset() {
+    if (!browserSess) reconnectBrowser();
+    if (!browserSess) { accErr('Not connected to a server'); return; }
+    var id = (el('acc-rid').value || '').trim();
+    if (!id) { accErr('Enter your email or username'); return; }
+    browserSess.sendAuth('requestReset', { emailOrUsername: id });
+    accErr('If that account has a verified email, a reset code is on its way.');
+  }
+  function doReset() {
+    if (!browserSess) { accErr('Not connected to a server'); return; }
+    var tok = (el('acc-rtoken').value || '').trim(), p = el('acc-rpass').value || '';
+    if (!tok || !p) { accErr('Enter the reset code and a new password'); return; }
+    browserSess.sendAuth('resetPassword', { token: tok, password: p });
+  }
+  function doSetEmail() {
+    if (!browserSess) { accErr('Not connected to a server'); return; }
+    var e = (el('acc-email').value || '').trim();
+    if (!e) { accErr('Enter an email address'); return; }
+    browserSess.sendSetEmail(e);
+  }
+  function doVerify() {
+    if (!browserSess) { accErr('Not connected to a server'); return; }
+    var t = (el('acc-verify').value || '').trim();
+    if (!t) { accErr('Enter the verification code'); return; }
+    browserSess.sendVerifyEmail(t);
+  }
+
   function onAuth(m) {
+    if (m.mode === 'requestReset') { accErr('If that account has a verified email, a reset code is on its way.'); return; }
+    if (m.mode === 'resetPassword') {
+      if (!m.ok) { accErr(m.error || 'reset failed'); return; }
+      forgotOpen = false; resetPrefill = null; authTab = 'login'; renderAccount();
+      err('Password reset — you can now log in.');
+      return;
+    }
     if (!m.ok) { accErr(m.error || 'failed'); return; }
     account = m.account;
     authToken = m.token;
     try { localStorage.setItem('gearworks_token', authToken); } catch (e) {}
     renderAccount();
     if (browserSess) browserSess.requestMyWorlds();
+  }
+
+  function onAccount(m) {
+    if (!m.ok) { accErr(m.error || 'could not update email'); return; }
+    if (m.account) account = m.account;
+    renderAccount();
+    accErr(account && account.emailVerified ? 'Email verified ✓' : 'Check your email for a verification code.');
   }
 
   function logout() {
@@ -1714,9 +1797,11 @@ var Lobby = (function () {
         setDot('on');
         if (m && m.maintenance) el('lb-maint').classList.remove('hidden'); else el('lb-maint').classList.add('hidden');
         if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); }
+        if (pendingVerify) { browserSess.sendVerifyEmail(pendingVerify); pendingVerify = null; }
         onRooms(rooms);
       },
       auth: function (m) { onAuth(m); },
+      account: function (m) { onAccount(m); },
       myWorlds: function (worlds) { onMyWorlds(worlds); },
       fail: function (reason) { setDot('off'); onFail(reason); browserSess = null; },
       status: function (s) { if (s === 'offline') setDot('off'); },

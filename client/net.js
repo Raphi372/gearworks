@@ -148,6 +148,7 @@ function NetSession(_unused, url, cb) {
         else if (intent.kind === 'browse') setStatus('lobby');
         return;
       case 'auth': cb.auth && cb.auth(m); return;
+      case 'account': cb.account && cb.account(m); return;   // email set/verify result
       case 'myWorlds': cb.myWorlds && cb.myWorlds(m.worlds || []); return;
       case 'welcome':
         self.myId = m.id; self.token = m.token; self.code = m.code; self.roomName = m.name;
@@ -239,6 +240,8 @@ function NetSession(_unused, url, cb) {
   self.admin = function (op, id, role) { send({ t: 'adm', op: op, id: id, role: role }); };
   self.sendChat = function (text) { send({ t: 'chat', text: text }); };
   self.sendAuth = function (mode, data) { send(Object.assign({ t: 'auth', mode: mode }, data || {})); };
+  self.sendSetEmail = function (email) { send({ t: 'setEmail', email: email }); };
+  self.sendVerifyEmail = function (token) { send({ t: 'verifyEmail', token: token }); };
   self.sendLogout = function () { send({ t: 'logout' }); };
   self.requestMyWorlds = function () { send({ t: 'myWorlds' }); };
   self.listRooms = function () { send({ t: 'listRooms' }); };

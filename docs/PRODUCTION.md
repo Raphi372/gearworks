@@ -27,6 +27,11 @@ All via environment variables (12-factor). Defaults in parentheses.
 | `AUTH_SECRET` | *(ephemeral)* | **set in prod** — HMAC key signing session tokens |
 | `TOKEN_TTL_DAYS` | `30` | session token lifetime |
 | `LOGIN_MAX_ATTEMPTS` | `8` | login attempts / 15 min / username |
+| `RESET_TTL_MIN` | `45` | password-reset / email-verification code lifetime |
+| `MAIL_PROVIDER` | `log` | `resend` (HTTP API) · `capture` (tests) · `log` (no send) |
+| `MAIL_API_KEY` | — | required for `MAIL_PROVIDER=resend` |
+| `MAIL_FROM` | *(resend.dev)* | `From:` address for recovery email |
+| `APP_URL` | — | base URL for clickable reset/verify links in email |
 | `MAINTENANCE` | `0` | `1` rejects new games; clients show a banner |
 | `ERROR_WEBHOOK` | — | optional JSON error POST endpoint (Sentry or custom) |
 | `GIT_SHA` | `dev` | reported by `/health` as `version` |

@@ -27,9 +27,11 @@ const { createRegistry } = require('./world/registry');
 const { createLobby } = require('./players/lobby');
 const { createAuth } = require('./players/accounts');
 const { createMonitoring } = require('./monitoring');
+const { createMailer } = require('./mailer');
 
 const log = config.log;
 const monitor = createMonitoring(config);
+const mailer = createMailer(config);
 
 async function main() {
   const store = createStore(config);
@@ -37,7 +39,7 @@ async function main() {
   catch (e) { log.error(`persistence backend not ready: ${e.message}`); process.exit(1); }
 
   const registry = createRegistry(config, store);
-  const auth = createAuth(config, store);
+  const auth = createAuth(config, store, mailer);
   const handleConn = createLobby(config, registry, auth, store);
 
   const server = createHttpServer(config, {

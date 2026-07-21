@@ -52,6 +52,15 @@ function createLobby(config, registry, auth, store) {
           return;
         }
         case 'auth': {
+          // recovery flows establish no session and are handled up front
+          if (m.mode === 'requestReset') {
+            await auth.requestReset({ emailOrUsername: m.emailOrUsername || m.email || m.username });
+            return conn.send({ t: 'auth', ok: true, mode: 'requestReset' });   // always ok (no account enumeration)
+          }
+          if (m.mode === 'resetPassword') {
+            const r = await auth.resetPassword({ token: m.token, password: m.password });
+            return conn.send({ t: 'auth', ok: !r.error, mode: 'resetPassword', error: r.error });
+          }
           let res;
           if (m.mode === 'register') res = await auth.register({ username: m.username, password: m.password, color: m.color });
           else if (m.mode === 'login') res = await auth.login({ username: m.username, password: m.password });
@@ -64,6 +73,16 @@ function createLobby(config, registry, auth, store) {
           return;
         }
         case 'logout': account = null; return;
+        case 'setEmail': {
+          const r = await auth.setEmail({ account, email: m.email });
+          if (r.account) account = r.account;
+          return conn.send({ t: 'account', ok: !r.error, error: r.error, account: account || null });
+        }
+        case 'verifyEmail': {
+          const r = await auth.verifyEmail({ token: m.token });
+          if (!r.error && account && r.account && r.account.id === account.id) account = r.account;
+          return conn.send({ t: 'account', ok: !r.error, error: r.error, account: account || null });
+        }
         case 'listRooms':
           conn.send({ t: 'lobby', proto: Core.PROTO, rooms: registry.publicRooms(), account: account || null, maintenance: config.MAINTENANCE });
           return;
