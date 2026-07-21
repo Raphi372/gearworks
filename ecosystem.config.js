@@ -37,15 +37,18 @@ module.exports = {
       // Let graceful shutdown finish saving every room before PM2 hard-kills.
       kill_timeout: 6000,
 
-      // Non-secret defaults. Bind to loopback: only the Cloudflare Tunnel
-      // (running on the same machine) needs to reach the server, so it is not
-      // exposed to your LAN. Override any of these in .env.
+      // Run-mode defaults. NOTE: values here become real environment variables,
+      // and real env always beats the .env file (server/config.js only fills in
+      // keys that aren't already set). So keep this block to fixed run-mode
+      // settings only. Everything you configure per-deployment — STORAGE,
+      // SAVE_DIR, DATABASE_URL, AUTH_SECRET, rate limits — belongs in .env, NOT
+      // here, or it would silently override your .env and ignore your choice
+      // (e.g. pinning STORAGE=file even when .env says postgres).
+      // HOST binds to loopback so only the same-machine Cloudflare Tunnel can
+      // reach the server; it is not exposed to your LAN.
       env: {
         NODE_ENV: 'production',
-        PORT: 8080,
         HOST: '127.0.0.1',
-        STORAGE: 'file',
-        SAVE_DIR: './saves',
       },
 
       // Logs (timestamped, stdout+stderr merged).
