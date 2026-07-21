@@ -18,6 +18,8 @@
     "pm2:logs": "pm2 logs gearworks",
     "validate": "node scripts/validate.js",
     "test": "node scripts/test.js",
+    "test:integration": "node --test test/*.test.js",
+    "test:all": "node scripts/test.js && node --test test/*.test.js",
     "build:client": "node scripts/build-client.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",

@@ -20,8 +20,10 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Static validation (syntax, determinism, module graph, CSP)
         run: npm run validate
-      - name: Integration tests (authority, snapshots, persistence, chat)
+      - name: Unit tests (determinism, snapshots, command authority, persistence, chat)
         run: npm test
+      - name: Networked integration tests (transport, auth, rooms, command authority, reconnect)
+        run: npm run test:integration
       - name: Prisma schema check
         run: npx prisma validate --schema prisma/schema.prisma
         env:

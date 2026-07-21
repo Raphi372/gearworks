@@ -57,7 +57,8 @@ permission tiers.
 | `server/` | Modular authoritative server — `network/`, `simulation/`, `players/`, `world/`, `database/` |
 | `prisma/` | Optional Postgres schema + migrations |
 | `public/` | Cloudflare Pages edge config (`_headers`, `_redirects`, `404.html`) |
-| `scripts/` | `validate`, `test`, `build:client` |
+| `scripts/` | `validate`, `test` (unit), `build:client` |
+| `test/` | Networked integration tests (`npm run test:integration`) + WS test-client/server helpers |
 | `docs/` | Architecture, deployment, database, production, multiplayer |
 
 ## Documentation
@@ -74,6 +75,20 @@ permission tiers.
 | [FREE_DEPLOYMENT_GUIDE.md](docs/FREE_DEPLOYMENT_GUIDE.md) | **$0/month** self-host: Cloudflare Pages + Tunnel + Neon, step by step |
 | [DATABASE.md](docs/DATABASE.md) | Persistence backends & schema |
 | [PRODUCTION.md](docs/PRODUCTION.md) | Config, security, scaling, runbook |
+
+## Testing
+
+```bash
+npm run validate          # syntax, determinism, module graph, CSP-safety
+npm test                  # unit: determinism, snapshots, command authority, persistence, chat
+npm run test:integration  # networked: WS transport, auth, rooms, command authority, reconnect, persistence
+npm run test:all          # unit + integration
+```
+
+The integration suite (`test/`) boots the real server on an ephemeral port and
+drives it over a zero-dependency WebSocket test client — no browser required. An
+optional Postgres-backed case runs when `TEST_DATABASE_URL` is set (migrations
+assumed applied); it is skipped otherwise. All run in CI on every push/PR.
 
 ## Production deployment
 
