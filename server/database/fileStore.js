@@ -18,12 +18,13 @@ function createFileStore(config) {
 
   /* -------- accounts (JSON map on disk; fine for self-host scale) -------- */
   const accountsPath = path.join(SAVE_DIR, 'accounts.json');
-  let accounts = null;                 // { byId: {id: acct}, byName: {lower: id} }
+  let accounts = null;                 // { byId, byName: {lower:id}, byEmail: {lower:id} }
   function loadAccounts() {
     if (accounts) return accounts;
     try { accounts = JSON.parse(fs.readFileSync(accountsPath, 'utf8')); }
-    catch (e) { accounts = { byId: {}, byName: {} }; }
-    if (!accounts.byId) accounts = { byId: {}, byName: {} };
+    catch (e) { accounts = { byId: {}, byName: {}, byEmail: {} }; }
+    if (!accounts.byId) accounts = { byId: {}, byName: {}, byEmail: {} };
+    if (!accounts.byEmail) accounts.byEmail = {};
     return accounts;
   }
   function persistAccounts() {
@@ -94,19 +95,32 @@ function createFileStore(config) {
       const id = a.byName[String(name).toLowerCase()];
       return Promise.resolve(id ? a.byId[id] : null);
     },
+    getAccountByEmail(email) {
+      const a = loadAccounts();
+      const id = a.byEmail[String(email).toLowerCase()];
+      return Promise.resolve(id ? a.byId[id] : null);
+    },
     getAccount(id) { return Promise.resolve(loadAccounts().byId[id] || null); },
     createAccount(acct) {
       const a = loadAccounts();
       const key = acct.username.toLowerCase();
       if (a.byName[key]) return Promise.resolve(null);   // taken
       a.byId[acct.id] = acct; a.byName[key] = acct.id;
+      if (acct.email) a.byEmail[String(acct.email).toLowerCase()] = acct.id;
       persistAccounts();
       return Promise.resolve(acct);
     },
     updateAccount(id, patch) {
       const a = loadAccounts();
-      if (a.byId[id]) { Object.assign(a.byId[id], patch); persistAccounts(); }
-      return Promise.resolve(a.byId[id] || null);
+      const acct = a.byId[id];
+      if (!acct) return Promise.resolve(null);
+      if (patch.email !== undefined) {   // keep the email index in sync
+        if (acct.email) delete a.byEmail[String(acct.email).toLowerCase()];
+        if (patch.email) a.byEmail[String(patch.email).toLowerCase()] = id;
+      }
+      Object.assign(acct, patch);
+      persistAccounts();
+      return Promise.resolve(acct);
     },
   };
 }

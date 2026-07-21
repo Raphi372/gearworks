@@ -77,13 +77,23 @@ guest, with account-owned persistent worlds.
   on connect for silent re-login. No server session table needed.
 - **Guests** get a persistent identity (token) with no password, so they can
   own worlds immediately and upgrade later.
+- **Recovery** (optional email): a signed-in player may attach an **email** and
+  verify it; a forgotten password is reset via a code emailed to that verified
+  address. Reset/verify codes are **purpose-scoped, short-lived HMAC tokens**
+  (same mechanism as sessions), and a reset token is bound to a hash of the
+  current password (`pv`) so it becomes **single-use** the moment the password
+  changes — no server-side token table. Reset requests are anti-enumeration
+  (identical response whether or not the account exists) and rate-limited. Email
+  is sent through the zero-dependency mailer (`server/mailer.js`; Resend HTTP
+  API in production). See mail env vars in [PRODUCTION.md](PRODUCTION.md).
 - **World ownership**: a world created while signed in records `ownerId`.
   Owners see their worlds under "My Worlds" and can **Resume** them; a private
   saved world can only be resumed by its owner.
 
 Both storage backends implement the account API (`getAccountByName`,
-`getAccount`, `createAccount`, `updateAccount`, `worldsByOwner`): the file
-backend uses a JSON store (`accounts.json`), Postgres uses the Prisma models.
+`getAccountByEmail`, `getAccount`, `createAccount`, `updateAccount`,
+`worldsByOwner`): the file backend uses a JSON store (`accounts.json`), Postgres
+uses the Prisma models.
 
 > Set a stable **`AUTH_SECRET`** in production — see docs/PRODUCTION.md.
 

@@ -45,7 +45,8 @@ function createPostgresStore(config) {
   // map a Prisma Account row to the backend-neutral account shape used by auth
   function toAcct(a) {
     return a && { id: a.id, username: a.username, color: a.color,
-      passwordHash: a.passwordHash, guest: a.isGuest, createdAt: +a.createdAt };
+      passwordHash: a.passwordHash, guest: a.isGuest, createdAt: +a.createdAt,
+      email: a.email || null, emailVerified: !!a.emailVerified };
   }
 
   return {
@@ -76,19 +77,26 @@ function createPostgresStore(config) {
     async getAccountByName(name) {
       return toAcct(await prisma.account.findUnique({ where: { username: String(name).toLowerCase() } }).catch(() => null));
     },
+    async getAccountByEmail(email) {
+      return toAcct(await prisma.account.findUnique({ where: { email: String(email).toLowerCase() } }).catch(() => null));
+    },
     async getAccount(id) { return toAcct(await prisma.account.findUnique({ where: { id } }).catch(() => null)); },
     async createAccount(acct) {
       try {
         const a = await prisma.account.create({ data: {
           id: acct.id, username: acct.username.toLowerCase(), displayName: acct.username,
-          color: acct.color, passwordHash: acct.passwordHash || null, isGuest: !!acct.guest } });
+          color: acct.color, passwordHash: acct.passwordHash || null, isGuest: !!acct.guest,
+          email: acct.email ? String(acct.email).toLowerCase() : null } });
         return toAcct(a);
-      } catch (e) { return null; }   // unique violation = username taken
+      } catch (e) { return null; }   // unique violation = username/email taken
     },
     async updateAccount(id, patch) {
       const data = {};
       if (patch.color) data.color = patch.color;
       if (patch.lastSeenAt) data.lastSeenAt = new Date(patch.lastSeenAt);
+      if (patch.passwordHash) data.passwordHash = patch.passwordHash;
+      if (patch.email !== undefined) data.email = patch.email ? String(patch.email).toLowerCase() : null;
+      if (patch.emailVerified !== undefined) data.emailVerified = !!patch.emailVerified;
       return toAcct(await prisma.account.update({ where: { id }, data }).catch(() => null));
     },
     prisma,   // exposed for progression/stats queries later
