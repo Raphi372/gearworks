@@ -64,6 +64,7 @@ permission tiers.
 
 | Doc | What |
 |---|---|
+| [ENGINEERING_GUIDELINES.md](docs/ENGINEERING_GUIDELINES.md) | **The architectural constitution — normative rules every contribution must follow** |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the three layers fit together |
 | [ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md) | Audit, technical debt, roadmap |
 | [MULTIPLAYER.md](docs/MULTIPLAYER.md) | Protocol, determinism, security model |
