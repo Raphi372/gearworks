@@ -67,6 +67,7 @@ permission tiers.
 | [ENGINEERING_GUIDELINES.md](docs/ENGINEERING_GUIDELINES.md) | **The architectural constitution — normative rules every contribution must follow** |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the three layers fit together |
 | [ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md) | Audit, technical debt, roadmap |
+| [ARCHITECTURE_AUDIT.md](docs/ARCHITECTURE_AUDIT.md) | Full current-state audit: strengths, debt, 10/100/10k scale, evolution plan, risks |
 | [MULTIPLAYER.md](docs/MULTIPLAYER.md) | Protocol, determinism, security model |
 | [LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) | Run & test locally |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Cloudflare Pages + Fly.io + Postgres |
