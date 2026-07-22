@@ -88,14 +88,14 @@ enum Role {
 // projection for leaderboards / analytics without deserializing snapshots.
 model Factory {
   id          String   @id @default(cuid())
-  worldId     String
+  worldId     String   @unique            // one projection row per world (upserted on save)
   world       World    @relation(fields: [worldId], references: [id], onDelete: Cascade)
   entityCount Int      @default(0)
   money       Int      @default(0)
   techTier    Int      @default(0)
   updatedAt   DateTime @updatedAt
 
-  @@index([worldId])
+  @@index([money])                        // leaderboard ordering
 }
 
 // ---- Progression: cross-world account progression --------------------------

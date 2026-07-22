@@ -13,6 +13,7 @@
      loadFile(absPath)      -> Promise<data?>  read a file save (file backend)
      listRoomCodes()        -> Promise<string[]>
      recentRooms(sinceMs)   -> Promise<world[]> worlds saved since (boot restore)
+     topFactories(limit)    -> Promise<row[]>  leaderboard from derived projections
      flush()                -> Promise         drain any queued writes
      close()                -> Promise         graceful shutdown
    ========================================================================== */

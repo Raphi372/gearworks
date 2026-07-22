@@ -1620,6 +1620,7 @@ var Lobby = (function () {
     }
     el('lb-back').onclick = function () { hide(); el('mainmenu').classList.remove('hidden'); };
     el('lb-refresh').onclick = function () { applyDiscovery(reconnectBrowser); };
+    el('lb-lb-refresh').onclick = function () { if (browserSess) browserSess.requestLeaderboard(); };
     el('lb-create').onclick = function () {
       go({ kind: 'create', roomName: el('lb-roomname').value || 'Factory World',
         public: el('lb-public').checked, maxPlayers: +el('lb-max').value || 8,
@@ -1819,6 +1820,27 @@ var Lobby = (function () {
     host.innerHTML = h;
   }
 
+  function fmtMoney(n) {
+    n = n | 0;
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+    return String(n);
+  }
+  function onLeaderboard(rows) {
+    var host = el('lb-leaderboard');
+    if (!rows || !rows.length) { host.innerHTML = '<p style="color:#667;font-size:12px">No factories yet — be the first!</p>'; return; }
+    var mine = account ? account.id : null;
+    var h = '';
+    rows.forEach(function (r, i) {
+      var you = !!(r.ownerId && r.ownerId === mine);
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)' + (you ? ';background:rgba(74,163,255,.08)' : '') + '">' +
+        '<span style="width:22px;text-align:center;color:#8aa;font-weight:600">' + (i + 1) + '</span>' +
+        '<div style="flex:1;min-width:0"><div class="wn">' + esc(r.name || 'World') + (you ? ' <span style="color:#4aa3ff">(you)</span>' : '') + '</div>' +
+        '<div class="wd">' + esc(r.ownerName || 'anonymous') + ' • $' + fmtMoney(r.money) + ' • ' + (r.entities | 0) + ' bld • ' + (r.tech | 0) + ' tech</div></div></div>';
+    });
+    host.innerHTML = h;
+  }
+
   /* --------------------------- room browser ------------------------- */
   function reconnectBrowser() {
     // reuse the existing connection only if it targets the same address;
@@ -1836,11 +1858,13 @@ var Lobby = (function () {
         if (m && m.maintenance) el('lb-maint').classList.remove('hidden'); else el('lb-maint').classList.add('hidden');
         if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); }
         if (pendingVerify) { browserSess.sendVerifyEmail(pendingVerify); pendingVerify = null; }
+        browserSess.requestLeaderboard();
         onRooms(rooms);
       },
       auth: function (m) { onAuth(m); },
       account: function (m) { onAccount(m); },
       myWorlds: function (worlds) { onMyWorlds(worlds); },
+      leaderboard: function (rows) { onLeaderboard(rows); },
       fail: function (reason) { setDot('off'); onFail(reason); browserSess = null; },
       status: function (s) { if (s === 'offline') setDot('off'); },
     });
