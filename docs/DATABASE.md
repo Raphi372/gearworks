@@ -27,8 +27,15 @@ Defined in `prisma/schema.prisma`:
   upserted on every save from the room's derived `projection()`. Powers the
   global leaderboard without deserializing snapshots. One row per world
   (`worldId` unique), indexed by `money`.
-- **WorldMember** — account ↔ world with a `Role` (HOST/ADMIN/PLAYER/SPECTATOR).
-  *Modelled; not yet written* — persistent membership is the next increment.
+- **WorldMember** — account ↔ world with a `Role` (HOST/ADMIN/PLAYER/SPECTATOR),
+  `@@unique([accountId, worldId])`. Written on every save from the room's
+  `members` set: an authenticated player is recorded the first time they enter a
+  world, and their role is updated on promotion (see `setRole`). Powers the
+  merged **My Worlds** list (owned + joined) and gates who may revive a dormant
+  private world — the owner or any recorded member. Postgres upserts one row per
+  member per save; the file backend carries the set forward in each save's
+  `meta.members` (a single save file per world), so a resume/restart never drops
+  prior members.
 - **Progression** — cross-world account level/xp/unlocked tech. *Modelled; not
   yet written* (needs an XP model — future increment).
 - **Stat** — time-series counters (production totals, playtime). *Modelled; not
@@ -122,6 +129,7 @@ uses the Prisma models.
 Implemented and tested on both backends (`npx prisma validate` passes; headless
 + browser tests pass): accounts, **account recovery** (email verify / password
 reset), account-owned world persistence, **versioned sessions**, restart
-continuity, and the **Factory leaderboard projection**. Next milestones:
-persistent **WorldMember** membership, **Progression** (cross-world XP/levels),
-and **Stat** time-series — all modelled in the schema, not yet written.
+continuity, the **Factory leaderboard projection**, and persistent
+**WorldMember** membership (merged My Worlds + member revive access). Next
+milestones: **Progression** (cross-world XP/levels) and **Stat** time-series —
+both modelled in the schema, not yet written.

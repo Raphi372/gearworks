@@ -72,7 +72,8 @@ function createFileStore(config) {
       const d = loadRoom(code);
       if (d && d.meta && (d.meta.saved || 0) >= sinceMs) {
         out.push({ code, name: d.meta.name, ownerId: d.meta.ownerId || null,
-          public: !!d.meta.public, snapshot: d.snapshot, savedAt: d.meta.saved || 0 });
+          public: !!d.meta.public, snapshot: d.snapshot, members: d.meta.members || [],
+          savedAt: d.meta.saved || 0 });
       }
     }
     return out.sort((a, b) => b.savedAt - a.savedAt);
@@ -107,6 +108,23 @@ function createFileStore(config) {
     return out.sort((a, b) => b.savedAt - a.savedAt);
   }
 
+  // worlds an account has played (recorded in meta.members), with its last role
+  function worldsByMember(aid) {
+    const out = [];
+    for (const code of listRoomCodes()) {
+      const d = loadRoom(code);
+      const mem = d && d.meta && Array.isArray(d.meta.members) ? d.meta.members.find((x) => x.aid === aid) : null;
+      if (mem) out.push({ code, name: d.meta.name, ownerId: d.meta.ownerId || null, role: mem.role || 'player', savedAt: d.meta.saved || 0 });
+    }
+    return out.sort((a, b) => b.savedAt - a.savedAt);
+  }
+  // an account's stored role in one world, or null if never a member
+  function membership(aid, code) {
+    const d = loadRoom(code);
+    const mem = d && d.meta && Array.isArray(d.meta.members) ? d.meta.members.find((x) => x.aid === aid) : null;
+    return mem ? { role: mem.role || 'player' } : null;
+  }
+
   return {
     kind: 'file',
     accountsEnabled: true,
@@ -116,6 +134,8 @@ function createFileStore(config) {
     loadFile: (p) => Promise.resolve(loadFile(p)),
     listRoomCodes: () => Promise.resolve(listRoomCodes()),
     worldsByOwner: (ownerId) => Promise.resolve(worldsByOwner(ownerId)),
+    worldsByMember: (aid) => Promise.resolve(worldsByMember(aid)),
+    membership: (aid, code) => Promise.resolve(membership(aid, code)),
     topFactories: (limit) => Promise.resolve(topFactories(limit || 20)),
     recentRooms: (sinceMs) => Promise.resolve(recentRooms(sinceMs)),
     flush: () => Promise.resolve(),
