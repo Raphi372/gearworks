@@ -1544,6 +1544,7 @@ var Lobby = (function () {
   var COLORS = ['#4aa3ff', '#7CFC9E', '#ffd873', '#ff7a7a', '#d76fb0', '#9fd8e0', '#e0a074', '#b39ddb'];
   var color = COLORS[0];
   var browserSess = null;     // lobby connection (auth + room browser)
+  var browserAddr = null;     // address browserSess connected to (reconnect if it changes)
   var account = null;         // { id, username, color, guest } or null
   var authToken = null;       // persisted session token
   var authTab = 'guest';      // guest | login | register
@@ -1554,6 +1555,33 @@ var Lobby = (function () {
 
   function el(id) { return document.getElementById(id); }
   function esc(s) { return UI.esc(s); }
+
+  /* ---------------------- server auto-discovery --------------------- */
+  // Optional: fetch a small pointer (GEARWORKS_DISCOVERY_URL) that holds the
+  // CURRENT game-server address, so a rotating quick-tunnel URL never needs
+  // re-typing on any device. The pointer contents are kept up to date by the
+  // tunnel script (scripts/tunnel-up.sh); the URL itself is stable.
+  var discUrl = (typeof window.GEARWORKS_DISCOVERY_URL === 'string' && window.GEARWORKS_DISCOVERY_URL) || '';
+  function parseDiscovery(txt) {
+    txt = String(txt || '').trim();
+    if (!txt) return '';
+    try { var j = JSON.parse(txt); if (j && j.server) txt = String(j.server).trim(); } catch (e) {}
+    var m = txt.match(/\b(wss?|https?):\/\/[^\s"']+/);
+    if (!m) return '';
+    return m[0].replace(/^http(s?):/i, 'ws$1:');   // normalize http(s) -> ws(s)
+  }
+  function applyDiscovery(cb) {
+    cb = cb || function () {};
+    if (!discUrl || typeof fetch === 'undefined') return cb();
+    var done = false;
+    var finish = function () { if (!done) { done = true; cb(); } };
+    var timer = setTimeout(finish, 2500);   // never block the lobby on a slow pointer
+    var url = discUrl + (discUrl.indexOf('?') < 0 ? '?' : '&') + 't=' + Math.floor(Date.now() / 30000);
+    fetch(url, { cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (txt) {
+      var addr = parseDiscovery(txt);
+      if (addr) { el('lb-server').value = addr; savePrefs(); }
+    }).catch(function () {}).then(function () { clearTimeout(timer); finish(); });
+  }
 
   function init() {
     var sw = el('lb-colors');
@@ -1591,7 +1619,7 @@ var Lobby = (function () {
           ? location.origin.replace(/^http/, 'ws') : 'ws://localhost:8080');
     }
     el('lb-back').onclick = function () { hide(); el('mainmenu').classList.remove('hidden'); };
-    el('lb-refresh').onclick = function () { reconnectBrowser(); };
+    el('lb-refresh').onclick = function () { applyDiscovery(reconnectBrowser); };
     el('lb-create').onclick = function () {
       go({ kind: 'create', roomName: el('lb-roomname').value || 'Factory World',
         public: el('lb-public').checked, maxPlayers: +el('lb-max').value || 8,
@@ -1612,6 +1640,7 @@ var Lobby = (function () {
     });
     el('reconn-leave').onclick = function () { location.reload(); };
     renderAccount();
+    applyDiscovery();   // pre-warm the current server address before Multiplayer is opened
   }
 
   function savePrefs() {
@@ -1625,7 +1654,7 @@ var Lobby = (function () {
     el('mainmenu').classList.add('hidden');
     el('lobby').classList.remove('hidden');
     err('');
-    reconnectBrowser();
+    applyDiscovery(reconnectBrowser);
   }
   function hide() {
     el('lobby').classList.add('hidden');
@@ -1792,9 +1821,13 @@ var Lobby = (function () {
 
   /* --------------------------- room browser ------------------------- */
   function reconnectBrowser() {
-    if (browserSess) { browserSess.listRooms(); if (account) browserSess.requestMyWorlds(); return; }
+    // reuse the existing connection only if it targets the same address;
+    // discovery/refresh can change the address and must reconnect.
+    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) browserSess.requestMyWorlds(); return; }
+    if (browserSess) { browserSess.leave(); browserSess = null; }
     savePrefs();
     setDot('warn');
+    browserAddr = el('lb-server').value;
     browserSess = NetSession(null, el('lb-server').value, {
       ensureGame: function () { return null; },
       game: function () { return null; },
@@ -1827,15 +1860,18 @@ var Lobby = (function () {
     host.innerHTML = h;
   }
   // Rejoin a still-live game after a full page reload, using the stored token.
+  // Resolve discovery first so we rejoin on the current server address.
   function resume(token) {
-    var prefs = {}; try { prefs = JSON.parse(localStorage.getItem('gearworks_prefs') || '{}'); } catch (e) {}
-    var srv = (el('lb-server') && el('lb-server').value) || prefs.server || '';
-    if (!srv) return;
-    resuming = true;
-    el('mainmenu').classList.add('hidden');
-    var rc = document.getElementById('reconn');
-    if (rc) { rc.classList.remove('hidden'); var rm = document.getElementById('reconn-msg'); if (rm) rm.textContent = 'Rejoining your game…'; }
-    Game.startNet(srv, { kind: 'rejoin', token: token, name: prefs.name || 'Engineer', color: color, authToken: authToken });
+    applyDiscovery(function () {
+      var prefs = {}; try { prefs = JSON.parse(localStorage.getItem('gearworks_prefs') || '{}'); } catch (e) {}
+      var srv = (el('lb-server') && el('lb-server').value) || prefs.server || '';
+      if (!srv) return;
+      resuming = true;
+      el('mainmenu').classList.add('hidden');
+      var rc = document.getElementById('reconn');
+      if (rc) { rc.classList.remove('hidden'); var rm = document.getElementById('reconn-msg'); if (rm) rm.textContent = 'Rejoining your game…'; }
+      Game.startNet(srv, { kind: 'rejoin', token: token, name: prefs.name || 'Engineer', color: color, authToken: authToken });
+    });
   }
   function resumed() { resuming = false; }
 

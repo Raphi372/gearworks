@@ -1,10 +1,11 @@
 # Cloudflare Pages edge headers for the Gearworks client.
 # Mirrors the Content-Security-Policy the Node server sets (network/httpServer.js).
 # connect-src allows ws:/wss: so the client can reach any dedicated game server
-# the player enters in the lobby.
+# the player enters in the lobby, plus the GitHub gist/raw hosts used by the
+# optional server-discovery pointer (GEARWORKS_DISCOVERY_URL).
 
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss: https://gist.githubusercontent.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: no-referrer
