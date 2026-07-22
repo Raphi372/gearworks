@@ -290,9 +290,23 @@ class Room {
   }
 
   /* --------------------------- persistence ----------------------------- */
+  // A cheap, DERIVED projection of the authoritative game for leaderboards and
+  // stats — so those queries never deserialize snapshots. World.snapshot stays
+  // the single source of truth (guidelines DB-6).
+  projection() {
+    const g = this.game;
+    return {
+      entities: g.Grid.entities.size,
+      money: Math.max(0, Math.round(g.S.money)),
+      tech: g.Research.done.size,
+      tick: g.S.tick,
+    };
+  }
+
   save(kind) {
     const data = {
-      meta: { name: this.name, code: this.code, ownerId: this.ownerId, public: this.public, saved: Date.now(), kind, seq: ++this.saveSeq },
+      meta: { name: this.name, code: this.code, ownerId: this.ownerId, public: this.public,
+        projection: this.projection(), saved: Date.now(), kind, seq: ++this.saveSeq },
       snapshot: this.game.Snapshot.capture(),
     };
     const ok = this.store.saveRoom(this.code, data);

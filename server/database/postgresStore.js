@@ -34,11 +34,20 @@ function createPostgresStore(config) {
         pending.delete(code);
         const ownerId = data.meta.ownerId || null;
         const isPublic = !!data.meta.public;
-        await prisma.world.upsert({
+        const w = await prisma.world.upsert({
           where: { code },
           create: { code, name: data.meta.name, snapshot: data.snapshot, savedAt: new Date(), ownerId, isPublic },
           update: { name: data.meta.name, snapshot: data.snapshot, savedAt: new Date(), ownerId, isPublic },
-        }).catch((e) => log.error(`pg save failed for room ${code}: ${e.message}`));
+        }).catch((e) => { log.error(`pg save failed for room ${code}: ${e.message}`); return null; });
+        // derived leaderboard projection (one row per world)
+        const p = w && data.meta.projection;
+        if (p) {
+          await prisma.factory.upsert({
+            where: { worldId: w.id },
+            create: { worldId: w.id, entityCount: p.entities | 0, money: p.money | 0, techTier: p.tech | 0 },
+            update: { entityCount: p.entities | 0, money: p.money | 0, techTier: p.tech | 0 },
+          }).catch((e) => log.error(`pg factory save failed for ${code}: ${e.message}`));
+        }
       }
     } finally { draining = false; }
   }
@@ -70,6 +79,17 @@ function createPostgresStore(config) {
         orderBy: { savedAt: 'desc' },
       }).catch(() => []);
       return rows.map((r) => ({ code: r.code, name: r.name, savedAt: +r.savedAt }));
+    },
+    async topFactories(limit) {
+      const rows = await prisma.factory.findMany({
+        orderBy: { money: 'desc' }, take: limit || 20,
+        include: { world: { select: { code: true, name: true, ownerId: true, savedAt: true, owner: { select: { username: true } } } } },
+      }).catch(() => []);
+      return rows.map((f) => ({
+        code: f.world.code, name: f.world.name, ownerId: f.world.ownerId,
+        ownerName: f.world.owner ? f.world.owner.username : null,
+        money: f.money, tech: f.techTier, entities: f.entityCount, savedAt: +f.world.savedAt,
+      }));
     },
     async recentRooms(sinceMs) {
       const rows = await prisma.world.findMany({

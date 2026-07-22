@@ -78,6 +78,23 @@ function createFileStore(config) {
     return out.sort((a, b) => b.savedAt - a.savedAt);
   }
 
+  // global leaderboard: read each save's derived projection, sort by net worth
+  function topFactories(limit) {
+    const out = [];
+    for (const code of listRoomCodes()) {
+      const d = loadRoom(code);
+      if (!d || !d.meta) continue;
+      const p = d.meta.projection || {};
+      out.push({ code, name: d.meta.name, ownerId: d.meta.ownerId || null,
+        money: p.money | 0, tech: p.tech | 0, entities: p.entities | 0, savedAt: d.meta.saved || 0 });
+    }
+    out.sort((a, b) => b.money - a.money);
+    const top = out.slice(0, limit);
+    const accts = loadAccounts();
+    top.forEach((f) => { f.ownerName = f.ownerId && accts.byId[f.ownerId] ? accts.byId[f.ownerId].username : null; });
+    return top;
+  }
+
   // saved worlds owned by an account: scan room saves' meta.ownerId
   function worldsByOwner(ownerId) {
     const out = [];
@@ -99,6 +116,7 @@ function createFileStore(config) {
     loadFile: (p) => Promise.resolve(loadFile(p)),
     listRoomCodes: () => Promise.resolve(listRoomCodes()),
     worldsByOwner: (ownerId) => Promise.resolve(worldsByOwner(ownerId)),
+    topFactories: (limit) => Promise.resolve(topFactories(limit || 20)),
     recentRooms: (sinceMs) => Promise.resolve(recentRooms(sinceMs)),
     flush: () => Promise.resolve(),
     close: () => Promise.resolve(),

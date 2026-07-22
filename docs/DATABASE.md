@@ -23,14 +23,29 @@ Defined in `prisma/schema.prisma`:
   runs fully anonymous today.
 - **World** — a saved authoritative game. `snapshot` (JSONB) is the exact
   `shared/core.js` snapshot — the same format the file backend stores.
+- **Factory** — **live** per-world projection (entity count, money, tech tier),
+  upserted on every save from the room's derived `projection()`. Powers the
+  global leaderboard without deserializing snapshots. One row per world
+  (`worldId` unique), indexed by `money`.
 - **WorldMember** — account ↔ world with a `Role` (HOST/ADMIN/PLAYER/SPECTATOR).
-- **Factory** — indexed per-world projection (entity count, money, tech tier)
-  for leaderboards without deserializing snapshots.
-- **Progression** — cross-world account level/xp/unlocked tech.
-- **Stat** — time-series counters (production totals, playtime).
+  *Modelled; not yet written* — persistent membership is the next increment.
+- **Progression** — cross-world account level/xp/unlocked tech. *Modelled; not
+  yet written* (needs an XP model — future increment).
+- **Stat** — time-series counters (production totals, playtime). *Modelled; not
+  yet written* (needs an aggregation cadence — future increment).
 
-The authoritative truth always lives in `World.snapshot`; `Factory`/`Stat` are
-denormalized projections for cheap queries.
+The authoritative truth always lives in `World.snapshot`; `Factory` is a derived
+projection for cheap queries (guidelines DB-6) — never a second source of truth.
+
+## Leaderboard
+
+Every save writes a small derived projection alongside the snapshot
+(`server/simulation/room.js` `projection()`: entities, net worth, tech count,
+tick). The store exposes `topFactories(limit)` on **both** backends — the file
+backend scans save metadata; Postgres queries the `Factory` table (upserted on
+save) joined to `World`/`Account` for the world name and owner. The lobby serves
+it publicly via the `leaderboard` message, and the client renders it in the
+lobby (own worlds highlighted).
 
 ## Setup
 
@@ -104,8 +119,9 @@ uses the Prisma models.
 
 ## Current status
 
-Schema, migration, adapter, abstraction, **and accounts + account-owned world
-persistence** are implemented and tested on both backends (`npx prisma
-validate` passes; headless auth/persistence + browser UI tests pass). Next
-milestones: cross-world progression/stats projections and OAuth/email
-recovery (P2+ in the [architecture review](ARCHITECTURE_REVIEW.md)).
+Implemented and tested on both backends (`npx prisma validate` passes; headless
++ browser tests pass): accounts, **account recovery** (email verify / password
+reset), account-owned world persistence, **versioned sessions**, restart
+continuity, and the **Factory leaderboard projection**. Next milestones:
+persistent **WorldMember** membership, **Progression** (cross-world XP/levels),
+and **Stat** time-series — all modelled in the schema, not yet written.

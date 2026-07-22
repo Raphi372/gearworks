@@ -90,6 +90,10 @@ function createLobby(config, registry, auth, store, tokens) {
           const worlds = await store.worldsByOwner(account.id).catch(() => []);
           return conn.send({ t: 'myWorlds', worlds });
         }
+        case 'leaderboard': {   // public: top factories by net worth
+          const rows = store.topFactories ? await store.topFactories(20).catch(() => []) : [];
+          return conn.send({ t: 'leaderboard', rows });
+        }
         case 'create':
           return enterRoom(async () => {
             if (config.MAINTENANCE) return conn.send({ t: 'err', reason: 'server is in maintenance — try again shortly' });

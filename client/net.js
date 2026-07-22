@@ -155,6 +155,7 @@ function NetSession(_unused, url, cb) {
         if (reconnectInfo) { reconnectInfo.token = m.token; try { localStorage.setItem('gearworks_reconnect', m.token); } catch (e) {} }
         return;
       case 'myWorlds': cb.myWorlds && cb.myWorlds(m.worlds || []); return;
+      case 'leaderboard': cb.leaderboard && cb.leaderboard(m.rows || []); return;
       case 'welcome':
         self.myId = m.id; self.token = m.token; self.code = m.code; self.roomName = m.name;
         self.role = m.role; self.autosaveSec = m.autosaveSec;
@@ -252,6 +253,7 @@ function NetSession(_unused, url, cb) {
   self.sendVerifyEmail = function (token) { send({ t: 'verifyEmail', token: token }); };
   self.sendLogout = function () { send({ t: 'logout' }); };
   self.requestMyWorlds = function () { send({ t: 'myWorlds' }); };
+  self.requestLeaderboard = function () { send({ t: 'leaderboard' }); };
   self.listRooms = function () { send({ t: 'listRooms' }); };
   self.requestResync = function () { send({ t: 'resync' }); };
   self.pump = function () {};   // sim advances on server messages only
