@@ -90,6 +90,7 @@ function NetSession(_unused, url, cb) {
   function setStatus(s) { self.status = s; cb.status && cb.status(s); }
 
   function send(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+  function clearReconnect() { try { localStorage.removeItem('gearworks_reconnect'); } catch (e) {} }
 
   function connect() {
     setStatus(attempts ? 'reconnecting' : 'connecting');
@@ -149,6 +150,10 @@ function NetSession(_unused, url, cb) {
         return;
       case 'auth': cb.auth && cb.auth(m); return;
       case 'account': cb.account && cb.account(m); return;   // email set/verify result
+      case 'token':                                          // server re-issued our reconnect token (role changed)
+        self.token = m.token;
+        if (reconnectInfo) { reconnectInfo.token = m.token; try { localStorage.setItem('gearworks_reconnect', m.token); } catch (e) {} }
+        return;
       case 'myWorlds': cb.myWorlds && cb.myWorlds(m.worlds || []); return;
       case 'welcome':
         self.myId = m.id; self.token = m.token; self.code = m.code; self.roomName = m.name;
@@ -157,6 +162,9 @@ function NetSession(_unused, url, cb) {
         m.players.forEach(function (p) { self.playersMap.set(p.id, p); });
         self.chatHistory = m.chat || [];      // replayed to the log after join completes
         reconnectInfo = { token: m.token };
+        // persist the reconnect token so a browser refresh / tab reload can
+        // rejoin the still-live world, not just an in-session socket drop
+        try { localStorage.setItem('gearworks_reconnect', m.token); } catch (e) {}
         startTimers();
         setStatus('online');
         cb.joined && cb.joined();
@@ -222,8 +230,8 @@ function NetSession(_unused, url, cb) {
       }
       case 'roomcfg': self.autosaveSec = m.autosaveSec; cb.players && cb.players('cfg'); return;
       case 'saved': cb.saved && cb.saved(m.by); return;
-      case 'kicked': closedByUser = true; cb.kicked && cb.kicked(); return;
-      case 'err': fail(m.reason); return;
+      case 'kicked': closedByUser = true; clearReconnect(); cb.kicked && cb.kicked(); return;
+      case 'err': if (reconnectInfo) clearReconnect(); fail(m.reason); return;
     }
   }
 
@@ -247,7 +255,7 @@ function NetSession(_unused, url, cb) {
   self.listRooms = function () { send({ t: 'listRooms' }); };
   self.requestResync = function () { send({ t: 'resync' }); };
   self.pump = function () {};   // sim advances on server messages only
-  self.leave = function () { closedByUser = true; stopTimers(); try { ws && ws.close(); } catch (e) {} setStatus('offline'); };
+  self.leave = function () { closedByUser = true; if (reconnectInfo) clearReconnect(); stopTimers(); try { ws && ws.close(); } catch (e) {} setStatus('offline'); };
   // test/debug: simulate an unexpected network drop (exercises reconnection)
   self._debugDrop = function () { try { ws && ws.close(); } catch (e) {} };
   return self;

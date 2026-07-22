@@ -70,6 +70,8 @@ const config = {
   // accounts / auth
   AUTH_SECRET: process.env.AUTH_SECRET || '',      // HMAC key for session tokens; MUST be set in prod
   TOKEN_TTL_DAYS: envInt('TOKEN_TTL_DAYS', 30),
+  RECONNECT_TTL_MIN: envInt('RECONNECT_TTL_MIN', 60),    // reconnect-token lifetime
+  RECONNECT_TTL_MS: envInt('RECONNECT_TTL_MIN', 60) * 60 * 1000,
   LOGIN_MAX_ATTEMPTS: envInt('LOGIN_MAX_ATTEMPTS', 8),   // per username per 15 min
   MAINTENANCE: process.env.MAINTENANCE === '1',    // reject new games with a notice
 

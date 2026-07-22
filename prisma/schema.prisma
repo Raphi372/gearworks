@@ -24,6 +24,7 @@ model Account {
   emailVerified Boolean @default(false)       // set once the address is confirmed
   displayName  String
   color        String   @default("#4aa3ff")
+  tokenVersion Int      @default(0)            // bump to invalidate all sessions (reset / logout-all)
   passwordHash String? // "saltHex:hashHex" (scrypt); null for guest accounts
   isGuest      Boolean  @default(false)
   createdAt    DateTime @default(now())

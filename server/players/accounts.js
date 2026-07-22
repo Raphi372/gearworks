@@ -9,9 +9,10 @@
 
      • Passwords hashed with scrypt + a per-account random salt.
      • Constant-time verification (timingSafeEqual).
-     • Stateless session tokens: base64url(payload) + "." + HMAC-SHA256(secret).
-       No server-side session table needed; tokens carry {aid, exp} and are
-       tamper-evident. Signed with AUTH_SECRET (env; must be stable in prod).
+     • Stateless session tokens (via players/tokens.js): tokens carry {aid, sv}
+       where `sv` is the account's tokenVersion, so a password reset / "log out
+       everywhere" bumps the version and invalidates every previously-issued
+       token. No server-side session table needed. Signed with AUTH_SECRET.
      • Login attempts are rate-limited per username.
      • Guest accounts (no password) let players get in instantly but still get
        a persistent identity + owned worlds via their saved token.
@@ -21,11 +22,7 @@
    ========================================================================== */
 const crypto = require('crypto');
 
-function b64url(buf) { return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
-function b64urlDecode(s) { return Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64'); }
-
-function createAuth(config, store, mailer) {
-  const SECRET = Buffer.from(config.AUTH_SECRET, 'utf8');
+function createAuth(config, store, mailer, tokens) {
   const TTL_MS = config.TOKEN_TTL_DAYS * 24 * 3600 * 1000;
   const RESET_TTL_MS = config.RESET_TTL_MIN * 60 * 1000;
   const attempts = new Map();   // usernameLower -> [timestamps] (login throttle)
@@ -46,43 +43,13 @@ function createAuth(config, store, mailer) {
   }
 
   /* ---------------------------- session tokens ------------------------ */
-  function sign(accountId) {
-    const payload = b64url(JSON.stringify({ aid: accountId, exp: Date.now() + TTL_MS }));
-    const mac = b64url(crypto.createHmac('sha256', SECRET).update(payload).digest());
-    return `${payload}.${mac}`;
-  }
-  function verifyToken(token) {
-    if (typeof token !== 'string' || token.indexOf('.') < 0) return null;
-    const [payload, mac] = token.split('.');
-    const expected = b64url(crypto.createHmac('sha256', SECRET).update(payload).digest());
-    // constant-time MAC compare
-    const a = Buffer.from(mac || ''), b = Buffer.from(expected);
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-    let data; try { data = JSON.parse(b64urlDecode(payload).toString('utf8')); } catch (e) { return null; }
-    if (!data || !data.aid || !data.exp || data.exp < Date.now()) return null;
-    return data.aid;
-  }
-
-  /* ------------------- purpose-scoped tokens (recovery) --------------- */
-  // Reset / verify links are stateless signed tokens like sessions, but scoped
-  // by `purpose` (so a session token can't act as a reset token), short-lived,
-  // and — for resets — bound to `pv` (a hash of the current password) so the
-  // token stops working the instant the password changes: single-use, no state.
-  function signScoped(aid, purpose, extra) {
-    const payload = b64url(JSON.stringify(Object.assign({ aid, purpose, exp: Date.now() + RESET_TTL_MS }, extra || {})));
-    const mac = b64url(crypto.createHmac('sha256', SECRET).update(payload).digest());
-    return `${payload}.${mac}`;
-  }
-  function verifyScoped(token, purpose) {
-    if (typeof token !== 'string' || token.indexOf('.') < 0) return null;
-    const [payload, mac] = token.split('.');
-    const expected = b64url(crypto.createHmac('sha256', SECRET).update(payload).digest());
-    const a = Buffer.from(mac || ''), b = Buffer.from(expected);
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-    let data; try { data = JSON.parse(b64urlDecode(payload).toString('utf8')); } catch (e) { return null; }
-    if (!data || data.purpose !== purpose || !data.aid || !data.exp || data.exp < Date.now()) return null;
-    return data;
-  }
+  // All tokens go through the shared signer (players/tokens.js). A session
+  // token carries {aid, sv}: `sv` is the account's tokenVersion, so bumping the
+  // version (password reset / "log out everywhere") invalidates every token
+  // already issued. Reset/verify tokens are the same primitive scoped by
+  // purpose; a reset token also binds `pv` (a hash of the current password) so
+  // it stops working the instant the password changes — single-use, no state.
+  function sessionToken(acct) { return tokens.sign('session', { aid: acct.id, sv: acct.tokenVersion || 0 }, TTL_MS); }
   function pvOf(acct) { return crypto.createHash('sha256').update(String(acct.passwordHash || 'guest')).digest('hex').slice(0, 16); }
 
   /* ----------------------------- validation --------------------------- */
@@ -138,11 +105,11 @@ function createAuth(config, store, mailer) {
     const acct = {
       id: crypto.randomBytes(12).toString('hex'),
       username, color: validColor(color),
-      passwordHash: hashPassword(password), guest: false, createdAt: Date.now(),
+      passwordHash: hashPassword(password), guest: false, tokenVersion: 0, createdAt: Date.now(),
     };
     const created = await store.createAccount(acct);
     if (!created) return { error: 'username already taken' };
-    return { account: publicAcct(created), token: sign(created.id) };
+    return { account: publicAcct(created), token: sessionToken(created) };
   }
 
   async function login({ username, password }) {
@@ -154,7 +121,7 @@ function createAuth(config, store, mailer) {
     const ok = acct && !acct.guest && verifyPassword(password, acct.passwordHash);
     if (!ok) { recordAttempt(key); return { error: 'invalid credentials' }; }
     attempts.delete(key);
-    return { account: publicAcct(acct), token: sign(acct.id) };
+    return { account: publicAcct(acct), token: sessionToken(acct) };
   }
 
   async function guest({ username, color }) {
@@ -164,18 +131,28 @@ function createAuth(config, store, mailer) {
     while (await store.getAccountByName(name)) { name = `${base}_${crypto.randomBytes(2).toString('hex')}`; if (++tries > 5) break; }
     const acct = {
       id: crypto.randomBytes(12).toString('hex'),
-      username: name, color: validColor(color), passwordHash: null, guest: true, createdAt: Date.now(),
+      username: name, color: validColor(color), passwordHash: null, guest: true, tokenVersion: 0, createdAt: Date.now(),
     };
     const created = await store.createAccount(acct);
     if (!created) return { error: 'could not create guest' };
-    return { account: publicAcct(created), token: sign(created.id) };
+    return { account: publicAcct(created), token: sessionToken(created) };
   }
 
   async function fromToken(token) {
-    const aid = verifyToken(token);
-    if (!aid) return null;
-    const acct = await store.getAccount(aid);
-    return acct ? publicAcct(acct) : null;
+    const d = tokens.verify('session', token);
+    if (!d) return null;
+    const acct = await store.getAccount(d.aid);
+    if (!acct || (acct.tokenVersion || 0) !== d.sv) return null;   // stale version → session invalidated
+    return publicAcct(acct);
+  }
+
+  // Underlying primitive for password-reset invalidation and a future
+  // "log out everywhere": bumping tokenVersion voids all existing sessions.
+  async function invalidateSessions(accountId) {
+    const acct = await store.getAccount(accountId).catch(() => null);
+    if (!acct) return { error: 'account not found' };
+    await store.updateAccount(accountId, { tokenVersion: (acct.tokenVersion || 0) + 1 });
+    return { ok: true };
   }
 
   /* ------------------------- account recovery ------------------------- */
@@ -189,20 +166,22 @@ function createAuth(config, store, mailer) {
     if (validEmail(q) && store.getAccountByEmail) acct = await store.getAccountByEmail(q.toLowerCase()).catch(() => null);
     if (!acct) acct = await store.getAccountByName(q).catch(() => null);
     if (acct && acct.email && acct.emailVerified && !acct.guest && !resetThrottled('r:' + acct.id)) {
-      const token = signScoped(acct.id, 'reset', { pv: pvOf(acct) });
+      const token = tokens.sign('reset', { aid: acct.id, pv: pvOf(acct) }, RESET_TTL_MS);
       await sendMail(acct.email, 'Reset your Gearworks password', resetBody(token)).catch(() => {});
     }
     return { ok: true };
   }
 
   async function resetPassword({ token, password }) {
-    const data = verifyScoped(token, 'reset');
+    const data = tokens.verify('reset', token);
     if (!data) return { error: 'this reset link is invalid or has expired' };
     if (!validPassword(password)) return { error: 'password must be at least 8 characters' };
     const acct = await store.getAccount(data.aid).catch(() => null);
     if (!acct) return { error: 'account not found' };
     if (data.pv !== pvOf(acct)) return { error: 'this reset link has already been used' };   // single-use
-    await store.updateAccount(acct.id, { passwordHash: hashPassword(password) });
+    // set the new password AND bump tokenVersion so every existing login session
+    // is invalidated (a reset should sign the account out everywhere).
+    await store.updateAccount(acct.id, { passwordHash: hashPassword(password), tokenVersion: (acct.tokenVersion || 0) + 1 });
     attempts.delete(String(acct.username || '').toLowerCase());   // clear login throttle
     return { ok: true };
   }
@@ -218,13 +197,13 @@ function createAuth(config, store, mailer) {
     }
     const updated = await store.updateAccount(account.id, { email: e, emailVerified: false });
     const acct = updated || await store.getAccount(account.id);
-    const token = signScoped(account.id, 'verify', {});
+    const token = tokens.sign('verify', { aid: account.id }, RESET_TTL_MS);
     await sendMail(e, 'Verify your Gearworks email', verifyBody(token)).catch(() => {});
     return { ok: true, account: publicAcct(acct) };
   }
 
   async function verifyEmail({ token }) {
-    const data = verifyScoped(token, 'verify');
+    const data = tokens.verify('verify', token);
     if (!data) return { error: 'this verification link is invalid or has expired' };
     const updated = await store.updateAccount(data.aid, { emailVerified: true });
     const acct = updated || await store.getAccount(data.aid).catch(() => null);
@@ -234,7 +213,7 @@ function createAuth(config, store, mailer) {
 
   function publicAcct(a) { return { id: a.id, username: a.username, color: a.color, guest: !!a.guest, email: a.email || null, emailVerified: !!a.emailVerified }; }
 
-  return { register, login, guest, fromToken, verifyToken, publicAcct,
+  return { register, login, guest, fromToken, publicAcct, invalidateSessions,
     requestReset, resetPassword, setEmail, verifyEmail };
 }
 

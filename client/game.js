@@ -1268,6 +1268,7 @@ var Game = (function () {
         // world once BOTH the welcome and the restored state are in hand
         Sess = sess;
         joinedReady = true;
+        Lobby.resumed && Lobby.resumed();
         document.getElementById('reconn').classList.add('hidden');
         if (G) finishJoin();
       },
@@ -1438,6 +1439,9 @@ var Game = (function () {
     cont.onclick = function () { var d = Save.loadData(); if (d) startLocal(d); };
     document.getElementById('mm-new').onclick = function () { startLocal(null); };
     document.getElementById('mm-multi').onclick = function () { Lobby.show(); };
+    // resume a live multiplayer game across a full page reload, if we hold a token
+    var rtok = null; try { rtok = localStorage.getItem('gearworks_reconnect'); } catch (e) {}
+    if (rtok) Lobby.resume(rtok);
     lastT = performance.now();
     requestAnimationFrame(loop);
   }
@@ -1546,6 +1550,7 @@ var Lobby = (function () {
   var forgotOpen = false;     // password-reset sub-form visible
   var resetPrefill = null;    // reset token from an emailed link (?reset=)
   var pendingVerify = null;   // verify token from an emailed link (?verify=)
+  var resuming = false;       // rejoining a live game from a stored reconnect token
 
   function el(id) { return document.getElementById(id); }
   function esc(s) { return UI.esc(s); }
@@ -1821,9 +1826,31 @@ var Lobby = (function () {
     });
     host.innerHTML = h;
   }
+  // Rejoin a still-live game after a full page reload, using the stored token.
+  function resume(token) {
+    var prefs = {}; try { prefs = JSON.parse(localStorage.getItem('gearworks_prefs') || '{}'); } catch (e) {}
+    var srv = (el('lb-server') && el('lb-server').value) || prefs.server || '';
+    if (!srv) return;
+    resuming = true;
+    el('mainmenu').classList.add('hidden');
+    var rc = document.getElementById('reconn');
+    if (rc) { rc.classList.remove('hidden'); var rm = document.getElementById('reconn-msg'); if (rm) rm.textContent = 'Rejoining your game…'; }
+    Game.startNet(srv, { kind: 'rejoin', token: token, name: prefs.name || 'Engineer', color: color, authToken: authToken });
+  }
+  function resumed() { resuming = false; }
+
   // A first-connect failure is expected on a static host whose origin isn't a
   // game server — show a neutral hint, not an alarming "Connection failed".
-  function onFail(reason) { err(reason && reason !== 'connection failed' ? reason : 'Not connected — check the server address, then Refresh.'); }
+  function onFail(reason) {
+    if (resuming) {   // the browser-refresh rejoin failed → the seat is gone; drop to the menu
+      resuming = false;
+      try { localStorage.removeItem('gearworks_reconnect'); } catch (e) {}
+      var rc = document.getElementById('reconn'); if (rc) rc.classList.add('hidden');
+      el('mainmenu').classList.remove('hidden');
+      return;
+    }
+    err(reason && reason !== 'connection failed' ? reason : 'Not connected — check the server address, then Refresh.');
+  }
 
   function go(intent) {
     savePrefs();
@@ -1835,7 +1862,7 @@ var Lobby = (function () {
     Game.startNet(el('lb-server').value, intent);
   }
 
-  return { init: init, show: show, hide: hide, onRooms: onRooms, onFail: onFail };
+  return { init: init, show: show, hide: hide, onRooms: onRooms, onFail: onFail, resume: resume, resumed: resumed };
 })();
 
 /* expose + launch */

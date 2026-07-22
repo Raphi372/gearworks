@@ -9,7 +9,7 @@
      config.js              env/flag configuration + structured logging
      network/websocket.js   RFC 6455 transport (zero-dependency)
      network/httpServer.js  /health, static files, WS upgrade, security headers
-     players/sessions.js    reconnect session tokens
+     players/tokens.js      shared HMAC signer (session/reconnect/recovery tokens)
      players/lobby.js       pre-room connection handling (create/join/rejoin)
      world/registry.js      the set of live rooms + invite codes
      simulation/room.js     one authoritative deterministic game per room
@@ -26,24 +26,26 @@ const { createStore } = require('./database');
 const { createRegistry } = require('./world/registry');
 const { createLobby } = require('./players/lobby');
 const { createAuth } = require('./players/accounts');
+const { createTokens } = require('./players/tokens');
 const { createMonitoring } = require('./monitoring');
 const { createMailer } = require('./mailer');
 
 const log = config.log;
 const monitor = createMonitoring(config);
 const mailer = createMailer(config);
+const tokens = createTokens(config);   // shared HMAC signer (sessions + reconnect + recovery)
 
 async function main() {
   const store = createStore(config);
   try { await store.ready(); }
   catch (e) { log.error(`persistence backend not ready: ${e.message}`); process.exit(1); }
 
-  const registry = createRegistry(config, store);
-  const auth = createAuth(config, store, mailer);
-  const handleConn = createLobby(config, registry, auth, store);
+  const registry = createRegistry(config, store, tokens);
+  const auth = createAuth(config, store, mailer, tokens);
+  const handleConn = createLobby(config, registry, auth, store, tokens);
 
   const server = createHttpServer(config, {
-    getStats: () => ({ rooms: registry.size(), sessions: require('./players/sessions').size }),
+    getStats: () => ({ rooms: registry.size(), connections: registry.connections() }),
     onUpgrade: (socket) => handleConn(new WSConn(socket)),
   });
 

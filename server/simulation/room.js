@@ -13,15 +13,16 @@
    Dependencies (store, sessions, id allocation, close callback) are injected
    so this module has no cycle with the room registry.
    ========================================================================== */
+const crypto = require('crypto');
 const zlib = require('zlib');
 const Core = require('../../shared/core.js');
 const { wsFrame } = require('../network/websocket');
-const sessions = require('../players/sessions');
 
 class Room {
   constructor(opts, deps) {
     this.cfg = deps.config;
     this.store = deps.store;
+    this.tokens = deps.tokens;           // shared HMAC signer for reconnect tokens
     this.newPlayerId = deps.newPlayerId;
     this.onClose = deps.onClose;         // (code) => void, removes us from the registry
 
@@ -109,30 +110,48 @@ class Room {
   }
 
   /* --------------------------- players -------------------------------- */
-  addPlayer(conn, info, role, token) {
+  addPlayer(conn, info, role, sessionId) {
     const id = this.newPlayerId();
     const c = {
-      id, conn,
+      id,
+      sid: sessionId || crypto.randomUUID(),   // stable seat identity across reconnects
+      conn,
       name: String(info.name || 'Engineer').slice(0, 20) || 'Engineer',
       color: /^#[0-9a-fA-F]{6}$/.test(info.color || '') ? info.color : '#4aa3ff',
       role,                       // host | admin | player | spectator
       gzOK: info.gz !== false,
-      token: token || sessions.newToken(),
       cursor: null, view: null,   // interest management inputs
       cmdWindow: [],              // rate limiting
       chatWindow: [],
     };
     this.clients.set(id, c);
-    sessions.set(c.token, { roomCode: this.code, playerId: id, name: c.name, color: c.color, role });
     this.lastActive = Date.now();
     // full authoritative snapshot -> the joining client
     this.sendSnapshot(c, 'join');
-    conn.send({ t: 'welcome', id, token: c.token, code: this.code, name: this.name,
+    conn.send({ t: 'welcome', id, token: this.reconnectToken(c), code: this.code, name: this.name,
       role, tick: this.game.S.tick, autosaveSec: this.autosaveSec,
       players: this.playerList(), chat: this.chatHistory });
     this.broadcast({ t: 'pjoin', p: this.publicInfo(c) }, c);
     this.cfg.log(`room ${this.code}: ${c.name} joined as ${role} (${this.clients.size} online)`);
     return c;
+  }
+
+  // Stateless, signed reconnect token: lets this seat rejoin the (possibly
+  // restarted/restored) room with no server-side session storage.
+  reconnectToken(c) {
+    return this.tokens.sign('reconnect',
+      { room: this.code, sid: c.sid, name: c.name, color: c.color, role: c.role },
+      this.cfg.RECONNECT_TTL_MS);
+  }
+
+  hasHost() { for (const c of this.clients.values()) if (c.role === 'host') return true; return false; }
+
+  // Change a seat's role, hand it a fresh reconnect token (so the token's
+  // embedded role stays accurate), then announce the change.
+  setRole(c, role) {
+    c.role = role;
+    c.conn.send({ t: 'token', token: this.reconnectToken(c) });
+    this.broadcast({ t: 'prole', id: c.id, role });
   }
 
   sendSnapshot(c, why) {
@@ -160,9 +179,7 @@ class Room {
     // host migration: promote the longest-connected remaining player
     if (c.role === 'host' && this.clients.size) {
       const heir = this.clients.values().next().value;
-      heir.role = 'host';
-      sessions.updateRole(heir.token, 'host');
-      this.broadcast({ t: 'prole', id: heir.id, role: 'host' });
+      this.setRole(heir, 'host');
       this.cfg.log(`room ${this.code}: host migrated to ${heir.name}`);
     }
   }
@@ -238,9 +255,7 @@ class Room {
         if (m.op === 'kick') { target.conn.send({ t: 'kicked' }); target.conn.close(); }
         else if (m.op === 'role' && c.role === 'host' &&
                  ['admin', 'player', 'spectator'].includes(m.role)) {
-          target.role = m.role;
-          sessions.updateRole(target.token, m.role);
-          this.broadcast({ t: 'prole', id: target.id, role: m.role });
+          this.setRole(target, m.role);
         }
         break;
       }

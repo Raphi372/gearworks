@@ -72,9 +72,14 @@ guest, with account-owned persistent worlds.
 - **Passwords** are hashed with **scrypt + a per-account random salt**
   (`node:crypto`, no external auth dependency), stored as `saltHex:hashHex` in
   `Account.passwordHash`. Verification is constant-time.
-- **Sessions** are stateless **HMAC-signed tokens** (`{aid,exp}` signed with
-  `AUTH_SECRET`). The client stores the token in `localStorage` and replays it
-  on connect for silent re-login. No server session table needed.
+- **Sessions** are stateless **HMAC-signed tokens** (`{aid, sv}` signed with
+  `AUTH_SECRET` via `players/tokens.js`). The client stores the token in
+  `localStorage` and replays it on connect for silent re-login — no server
+  session table. `sv` is the account's **`tokenVersion`**: verification rejects a
+  token whose `sv` no longer matches, so bumping the version invalidates every
+  session already issued. A **password reset bumps `tokenVersion`** (signing the
+  account out everywhere), and the same primitive backs a future "log out
+  everywhere". Reconnect tokens are the same signer, scoped `reconnect`.
 - **Guests** get a persistent identity (token) with no password, so they can
   own worlds immediately and upgrade later.
 - **Recovery** (optional email): a signed-in player may attach an **email** and
