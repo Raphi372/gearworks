@@ -1810,12 +1810,17 @@ var Lobby = (function () {
   function onMyWorlds(worlds) {
     var host = el('lb-myworlds');
     if (!account || !worlds || !worlds.length) { host.innerHTML = ''; return; }
-    var h = '<div class="divider"></div><b style="font-size:13px">Your saved worlds</b>';
+    var h = '<div class="divider"></div><b style="font-size:13px">Your worlds</b>';
     worlds.forEach(function (w) {
       var when = w.savedAt ? new Date(w.savedAt).toLocaleString() : '';
-      h += '<div class="world-row"><div><div class="wn">' + esc(w.name) + '</div>' +
+      // owner sees "Owner" + Resume; a member (played but doesn't own it) sees
+      // their role + Rejoin. The server enforces access either way.
+      var badge = w.owner
+        ? '<span class="wbadge own">Owner</span>'
+        : '<span class="wbadge mem">' + esc(w.role || 'player') + '</span>';
+      h += '<div class="world-row"><div><div class="wn">' + esc(w.name) + badge + '</div>' +
         '<div class="wd">' + esc(w.code) + (when ? ' • ' + esc(when) : '') + '</div></div>' +
-        '<button class="btn" data-resume="' + esc(w.code) + '">Resume</button></div>';
+        '<button class="btn" data-resume="' + esc(w.code) + '">' + (w.owner ? 'Resume' : 'Rejoin') + '</button></div>';
     });
     host.innerHTML = h;
   }

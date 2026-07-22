@@ -30,6 +30,9 @@ class Room {
     this.name = String(opts.name || 'Gearworks World').slice(0, 40);
     this.public = !!opts.public;
     this.ownerId = opts.ownerId || null;      // account that owns this saved world
+    // persistent membership (accountId -> {role,name}); carried forward from a
+    // saved world so a resume/restart never drops previously-recorded members.
+    this.members = new Map((opts.members || []).map((mm) => [mm.aid, { role: mm.role, name: mm.name }]));
     this.maxPlayers = Math.min(this.cfg.MAX_PLAYERS_PER_ROOM, Math.max(2, opts.maxPlayers | 0 || this.cfg.MAX_PLAYERS_PER_ROOM));
     this.autosaveSec = Math.min(600, Math.max(15, opts.autosaveSec | 0 || 60));
     this.game = Core.createGame({ seed: opts.seed });
@@ -119,12 +122,16 @@ class Room {
       name: String(info.name || 'Engineer').slice(0, 20) || 'Engineer',
       color: /^#[0-9a-fA-F]{6}$/.test(info.color || '') ? info.color : '#4aa3ff',
       role,                       // host | admin | player | spectator
+      aid: info.aid || null,      // account id (authenticated players) -> membership
       gzOK: info.gz !== false,
       cursor: null, view: null,   // interest management inputs
       cmdWindow: [],              // rate limiting
       chatWindow: [],
     };
     this.clients.set(id, c);
+    // record persistent membership for authenticated players (spectators too:
+    // they've "been here"); role updates on promotion (see setRole)
+    if (c.aid) this.members.set(c.aid, { role, name: c.name });
     this.lastActive = Date.now();
     // full authoritative snapshot -> the joining client
     this.sendSnapshot(c, 'join');
@@ -145,11 +152,14 @@ class Room {
   }
 
   hasHost() { for (const c of this.clients.values()) if (c.role === 'host') return true; return false; }
+  // an account's persisted role in this world (carried forward across sessions), or null
+  memberRole(aid) { const m = aid && this.members.get(aid); return m ? m.role : null; }
 
   // Change a seat's role, hand it a fresh reconnect token (so the token's
   // embedded role stays accurate), then announce the change.
   setRole(c, role) {
     c.role = role;
+    if (c.aid && this.members.has(c.aid)) this.members.get(c.aid).role = role;   // persist the promotion
     c.conn.send({ t: 'token', token: this.reconnectToken(c) });
     this.broadcast({ t: 'prole', id: c.id, role });
   }
@@ -306,7 +316,9 @@ class Room {
   save(kind) {
     const data = {
       meta: { name: this.name, code: this.code, ownerId: this.ownerId, public: this.public,
-        projection: this.projection(), saved: Date.now(), kind, seq: ++this.saveSeq },
+        projection: this.projection(),
+        members: Array.from(this.members, ([aid, v]) => ({ aid, role: v.role, name: v.name })),
+        saved: Date.now(), kind, seq: ++this.saveSeq },
       snapshot: this.game.Snapshot.capture(),
     };
     const ok = this.store.saveRoom(this.code, data);

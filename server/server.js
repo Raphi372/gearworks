@@ -67,7 +67,7 @@ async function main() {
     let restored = 0;
     for (const w of recent) {
       if (registry.get(w.code)) continue;
-      if (registry.create({ code: w.code, name: w.name, ownerId: w.ownerId, public: w.public, snapshot: w.snapshot })) restored++;
+      if (registry.create({ code: w.code, name: w.name, ownerId: w.ownerId, public: w.public, snapshot: w.snapshot, members: w.members })) restored++;
     }
     if (restored) log(`restored ${restored} recently-active world(s) from the last ${config.RESTORE_WINDOW_MIN} min`);
   }

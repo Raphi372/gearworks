@@ -27,10 +27,18 @@ function createLobby(config, registry, auth, store, tokens) {
     }
     conn.onclose = () => {};
 
-    // identity used when joining: authenticated account, else the inline name
+    // identity used when joining: authenticated account (with id, for membership),
+    // else the inline name
     function identity(m) {
-      if (account) return { name: account.username, color: account.color, gz: (hello && hello.gz) };
+      if (account) return { name: account.username, color: account.color, gz: (hello && hello.gz), aid: account.id };
       return { name: m.name || (hello && hello.name), color: m.color || (hello && hello.color), gz: (hello && hello.gz) };
+    }
+    // role a returning authed player gets in a live room: owner or a prior
+    // admin/host member is restored to admin (never host — no host hijack).
+    function restoredRole(r) {
+      if (!account) return 'player';
+      const mr = r.memberRole(account.id);
+      return (account.id === r.ownerId || mr === 'admin' || mr === 'host') ? 'admin' : 'player';
     }
 
     async function enterRoom(fn) {
@@ -87,7 +95,14 @@ function createLobby(config, registry, auth, store, tokens) {
           return;
         case 'myWorlds': {
           if (!account || !store.accountsEnabled) return conn.send({ t: 'myWorlds', worlds: [] });
-          const worlds = await store.worldsByOwner(account.id).catch(() => []);
+          const [owned, joined] = await Promise.all([
+            store.worldsByOwner(account.id).catch(() => []),
+            store.worldsByMember ? store.worldsByMember(account.id).catch(() => []) : [],
+          ]);
+          const byCode = new Map();   // owned entries win over joined
+          owned.forEach((w) => byCode.set(w.code, { code: w.code, name: w.name, savedAt: w.savedAt, owner: true, role: 'host' }));
+          joined.forEach((w) => { if (!byCode.has(w.code)) byCode.set(w.code, { code: w.code, name: w.name, savedAt: w.savedAt, owner: false, role: w.role || 'player' }); });
+          const worlds = Array.from(byCode.values()).sort((a, b) => b.savedAt - a.savedAt);
           return conn.send({ t: 'myWorlds', worlds });
         }
         case 'leaderboard': {   // public: top factories by net worth
@@ -114,7 +129,7 @@ function createLobby(config, registry, auth, store, tokens) {
             const asSpec = !!m.spectate;
             if (!asSpec && r.nonSpectators() >= r.maxPlayers) return conn.send({ t: 'err', reason: 'room full' });
             room = r;
-            client = r.addPlayer(conn, identity(m), asSpec ? 'spectator' : 'player');
+            client = r.addPlayer(conn, identity(m), asSpec ? 'spectator' : restoredRole(r));
             wire();
           });
         case 'resume':
@@ -122,22 +137,26 @@ function createLobby(config, registry, auth, store, tokens) {
           return enterRoom(async () => {
             if (config.MAINTENANCE) return conn.send({ t: 'err', reason: 'server is in maintenance — try again shortly' });
             const code = String(m.code || '').toUpperCase().trim();
-            if (registry.get(code)) {   // already live — just join it
-              room = registry.get(code);
-              client = room.addPlayer(conn, identity(m), 'player');
+            const live = registry.get(code);
+            if (live) {   // already live — join it with any restored role
+              room = live;
+              client = live.addPlayer(conn, identity(m), restoredRole(live));
               return wire();
             }
             const saved = await store.loadRoom(code).catch(() => null);
             if (!saved) return conn.send({ t: 'err', reason: 'no saved world with that code' });
-            // only the owner may resume a private saved world
-            if (saved.meta.ownerId && (!account || account.id !== saved.meta.ownerId)) {
+            // access: the owner, OR anyone who has played it (a recorded member)
+            const isMember = account && store.membership ? await store.membership(account.id, code).catch(() => null) : null;
+            if (saved.meta.ownerId && (!account || (account.id !== saved.meta.ownerId && !isMember))) {
               return conn.send({ t: 'err', reason: 'that world belongs to another player' });
             }
             const r = registry.create({ code, name: saved.meta.name, public: !!m.public,
-              ownerId: saved.meta.ownerId || (account && account.id), snapshot: saved.snapshot });
+              ownerId: saved.meta.ownerId || (account && account.id),
+              members: saved.meta.members || [],       // carry forward (file backend)
+              snapshot: saved.snapshot });
             if (!r) return conn.send({ t: 'err', reason: 'server full (rooms)' });
             room = r;
-            client = r.addPlayer(conn, identity(m), 'host');
+            client = r.addPlayer(conn, identity(m), 'host');   // the resumer revives + hosts the session
             wire();
           });
         case 'rejoin':

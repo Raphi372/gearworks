@@ -22,6 +22,9 @@ function createPostgresStore(config) {
   }
   const prisma = new PrismaClient({ datasources: { db: { url: DATABASE_URL } } });
 
+  // app role (lowercase) -> Prisma Role enum
+  function roleEnum(r) { const R = String(r || '').toUpperCase(); return ['HOST', 'ADMIN', 'PLAYER', 'SPECTATOR'].includes(R) ? R : 'PLAYER'; }
+
   // async write queue so Room.save() (called from the sim loop) never awaits
   const pending = new Map();   // code -> latest data (coalesced)
   let draining = false;
@@ -47,6 +50,17 @@ function createPostgresStore(config) {
             create: { worldId: w.id, entityCount: p.entities | 0, money: p.money | 0, techTier: p.tech | 0 },
             update: { entityCount: p.entities | 0, money: p.money | 0, techTier: p.tech | 0 },
           }).catch((e) => log.error(`pg factory save failed for ${code}: ${e.message}`));
+        }
+        // persistent membership (upsert per member; existing rows are never
+        // dropped, so members accumulate across saves)
+        const members = w && Array.isArray(data.meta.members) ? data.meta.members : [];
+        for (const mem of members) {
+          if (!mem || !mem.aid) continue;
+          await prisma.worldMember.upsert({
+            where: { accountId_worldId: { accountId: mem.aid, worldId: w.id } },
+            create: { accountId: mem.aid, worldId: w.id, role: roleEnum(mem.role) },
+            update: { role: roleEnum(mem.role) },
+          }).catch((e) => log.error(`pg member save failed for ${code}: ${e.message}`));
         }
       }
     } finally { draining = false; }
@@ -79,6 +93,21 @@ function createPostgresStore(config) {
         orderBy: { savedAt: 'desc' },
       }).catch(() => []);
       return rows.map((r) => ({ code: r.code, name: r.name, savedAt: +r.savedAt }));
+    },
+    async worldsByMember(accountId) {
+      const rows = await prisma.worldMember.findMany({
+        where: { accountId },
+        include: { world: { select: { code: true, name: true, ownerId: true, savedAt: true } } },
+        orderBy: { world: { savedAt: 'desc' } },
+      }).catch(() => []);
+      return rows.map((m) => ({ code: m.world.code, name: m.world.name, ownerId: m.world.ownerId,
+        role: String(m.role).toLowerCase(), savedAt: +m.world.savedAt }));
+    },
+    async membership(accountId, code) {
+      const w = await prisma.world.findUnique({ where: { code }, select: { id: true } }).catch(() => null);
+      if (!w) return null;
+      const m = await prisma.worldMember.findUnique({ where: { accountId_worldId: { accountId, worldId: w.id } } }).catch(() => null);
+      return m ? { role: String(m.role).toLowerCase() } : null;
     },
     async topFactories(limit) {
       const rows = await prisma.factory.findMany({
