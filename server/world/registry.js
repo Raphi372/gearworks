@@ -10,7 +10,7 @@
 const crypto = require('crypto');
 const { Room } = require('../simulation/room');
 
-function createRegistry(config, store) {
+function createRegistry(config, store, tokens) {
   const rooms = new Map();     // code -> Room
   let nextPlayerId = 1;
 
@@ -22,7 +22,7 @@ function createRegistry(config, store) {
   }
 
   const deps = {
-    config, store,
+    config, store, tokens,
     newPlayerId: () => nextPlayerId++,
     onClose: (code) => rooms.delete(code),
   };
@@ -54,6 +54,7 @@ function createRegistry(config, store) {
   return {
     create, get, publicRooms,
     size: () => rooms.size,
+    connections: () => { let n = 0; for (const r of rooms.values()) n += r.clients.size; return n; },
     all: () => Array.from(rooms.values()),
     destroyAll: (why) => { for (const r of Array.from(rooms.values())) r.destroy(why); },
   };

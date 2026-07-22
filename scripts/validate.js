@@ -51,10 +51,12 @@ try {
   require('../server/network/websocket');
   require('../server/network/httpServer');
   require('../server/database');
-  require('../server/players/sessions');
+  require('../server/players/tokens');
+  require('../server/players/accounts');
   require('../server/players/lobby');
   require('../server/world/registry');
   require('../server/simulation/room');
+  require('../server/mailer');
   ok('all server modules resolve');
 } catch (e) { bad('server module load failed: ' + e.message); }
 

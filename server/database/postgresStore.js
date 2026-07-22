@@ -47,7 +47,7 @@ function createPostgresStore(config) {
   function toAcct(a) {
     return a && { id: a.id, username: a.username, color: a.color,
       passwordHash: a.passwordHash, guest: a.isGuest, createdAt: +a.createdAt,
-      email: a.email || null, emailVerified: !!a.emailVerified };
+      email: a.email || null, emailVerified: !!a.emailVerified, tokenVersion: a.tokenVersion || 0 };
   }
 
   return {
@@ -106,6 +106,7 @@ function createPostgresStore(config) {
       if (patch.passwordHash) data.passwordHash = patch.passwordHash;
       if (patch.email !== undefined) data.email = patch.email ? String(patch.email).toLowerCase() : null;
       if (patch.emailVerified !== undefined) data.emailVerified = !!patch.emailVerified;
+      if (patch.tokenVersion !== undefined) data.tokenVersion = patch.tokenVersion | 0;
       return toAcct(await prisma.account.update({ where: { id }, data }).catch(() => null));
     },
     prisma,   // exposed for progression/stats queries later

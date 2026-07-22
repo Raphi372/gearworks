@@ -13,9 +13,8 @@
    and ownership of the worlds they create.
    ========================================================================== */
 const Core = require('../../shared/core.js');
-const sessions = require('./sessions');
 
-function createLobby(config, registry, auth, store) {
+function createLobby(config, registry, auth, store, tokens) {
   return function handleConn(conn) {
     let client = null;    // set once inside a room
     let room = null;
@@ -139,11 +138,16 @@ function createLobby(config, registry, auth, store) {
           });
         case 'rejoin':
           return enterRoom(async () => {
-            const sess = sessions.get(String(m.token || ''));
-            const r = sess && registry.get(sess.roomCode);
-            if (!r) return conn.send({ t: 'err', reason: 'session expired' });
+            const d = tokens.verify('reconnect', String(m.token || ''));
+            if (!d) return conn.send({ t: 'err', reason: 'session expired' });
+            const r = registry.get(d.room);
+            if (!r) return conn.send({ t: 'err', reason: 'that game is no longer available' });
+            // re-seat with the token's identity; a stale 'host' token can't hijack
+            // an existing host — it rejoins as a player instead.
+            let role = d.role;
+            if (role === 'host' && r.hasHost()) role = 'player';
             room = r;
-            client = r.addPlayer(conn, { name: sess.name, color: sess.color, gz: hello && hello.gz }, sess.role, m.token);
+            client = r.addPlayer(conn, { name: d.name, color: d.color, gz: hello && hello.gz }, role, d.sid);
             wire();
           });
       }

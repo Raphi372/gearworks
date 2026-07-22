@@ -28,6 +28,7 @@ All via environment variables (12-factor). Defaults in parentheses.
 | `ALLOW_ORIGIN` | `*` | CORS for `/health` |
 | `AUTH_SECRET` | *(ephemeral)* | **set in prod** — HMAC key signing session tokens |
 | `TOKEN_TTL_DAYS` | `30` | session token lifetime |
+| `RECONNECT_TTL_MIN` | `60` | reconnect-token lifetime (rejoin a live game) |
 | `LOGIN_MAX_ATTEMPTS` | `8` | login attempts / 15 min / username |
 | `RESET_TTL_MIN` | `45` | password-reset / email-verification code lifetime |
 | `MAIL_PROVIDER` | `log` | `resend` (HTTP API) · `capture` (tests) · `log` (no send) |
@@ -69,7 +70,7 @@ All via environment variables (12-factor). Defaults in parentheses.
 
 ## Observability
 
-- `GET /health` → `{ ok, uptime, proto, version, rooms, sessions }`. Wired as
+- `GET /health` → `{ ok, uptime, proto, version, rooms, connections }`. Wired as
   the Docker `HEALTHCHECK` and the Fly `[[http_service.checks]]`.
 - Structured JSON logs in production (one line per event) — ship to the
   platform's log drain (Fly/Railway both aggregate stdout).

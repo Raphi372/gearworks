@@ -110,9 +110,17 @@ Weather is part of synced state and changes only via (admin-gated) commands.
   autosave config) → `player` (build/trade/research) → `spectator`
   (watch + visible cursor only; every sim command refused server-side).
 * **Join/leave/reconnect:** joining streams a snapshot; leaving broadcasts
-  presence; an unexpected drop keeps the session server-side — the client
-  auto-reconnects with exponential backoff (1s→10s, 10 attempts) using its
-  session token and resumes with role intact and a fresh snapshot.
+  presence. Every seat holds a **stateless, HMAC-signed reconnect token**
+  (`{room, sessionId, name, color, role, exp}`, signed with `AUTH_SECRET` via
+  `players/tokens.js`) — there is **no server-side session table**. On an
+  unexpected drop the client auto-reconnects with exponential backoff (1s→10s,
+  10 attempts); because the token is stateless it also survives a **browser
+  refresh** and a **server restart** (the token is persisted in `localStorage`,
+  and P0.3 restores the live room), re-seating the player with role intact and
+  a fresh snapshot. A fresh token is re-issued whenever a seat's role changes, so
+  a stale token can never re-seat as a role the player no longer holds (and a
+  stale `host` token can't hijack an existing host). Requires a **stable
+  `AUTH_SECRET`** across restarts.
 * **Co-op safety:** undo/redo are per-player stacks of *inverse commands*
   (place→remove, remove→restore, paste→removeMany). They re-enter the normal
   validation pipeline, so undoing something another player already changed is
