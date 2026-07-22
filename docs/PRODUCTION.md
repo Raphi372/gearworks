@@ -16,6 +16,8 @@ All via environment variables (12-factor). Defaults in parentheses.
 | `SAVE_DIR` | `saves` | file backend directory (mount a volume at `/data`) |
 | `DATABASE_URL` | — | required for `STORAGE=postgres` |
 | `BACKUPS` | `5` | rotating file backups kept |
+| `RESTORE_ON_BOOT` | `1` | re-create recently-active worlds as live rooms on start (`0` disables) |
+| `RESTORE_WINDOW_MIN` | `30` | how recent a saved world must be to be restored |
 | `MAX_ROOMS` | `32` | rooms per process |
 | `MAX_PLAYERS_PER_ROOM` | `16` | seats per room |
 | `MAX_MSG_BYTES` | `524288` | inbound frame cap (flood guard) |
@@ -102,9 +104,13 @@ connect, so a low-traffic game costs near zero.
 
 ## Runbook
 
-- **Deploy backend:** push to `main` (CI) or `fly deploy`. Rooms save on the old
-  machine's `SIGTERM` and reload on the new one only if `--load` / Postgres is
-  used; otherwise in-flight rooms end (announce maintenance, or drain first).
+- **Deploy backend:** push to `main` (CI) or `fly deploy`. Every room final-saves
+  on the old process's `SIGTERM`, and the new process **restores recently-active
+  worlds on boot** (`RESTORE_ON_BOOT`, within `RESTORE_WINDOW_MIN`), so an ongoing
+  world stays live and joinable across a restart/deploy — owners don't have to
+  manually Resume, and public worlds reappear in the browser. Note: seamless
+  *auto-reconnect* of the exact seat still needs durable sessions (roadmap P1.2);
+  today players rejoin the still-live room by code / the public browser.
 - **Resume a world:** `node server/server.js --load /data/<CODE>.json`.
 - **Rollback:** redeploy the previous image tag (`fly releases` / Railway
   history). Client rollback: redeploy the previous Pages build.

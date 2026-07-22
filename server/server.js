@@ -55,6 +55,21 @@ async function main() {
     log(`resumed save into room ${r.code} ("${r.name}") @tick ${r.game.S.tick}`);
   }
 
+  // Restart/deploy continuity: re-create rooms saved in the recent window as
+  // live games, so an ongoing world survives a process restart (or crash) and
+  // stays joinable — players can rejoin by code / the public browser, owners
+  // don't have to manually Resume. Empty rooms idle-evict as usual.
+  if (config.RESTORE_ON_BOOT && store.recentRooms) {
+    const since = Date.now() - config.RESTORE_WINDOW_MIN * 60 * 1000;
+    const recent = await store.recentRooms(since).catch((e) => { log.error(`restore query failed: ${e.message}`); return []; });
+    let restored = 0;
+    for (const w of recent) {
+      if (registry.get(w.code)) continue;
+      if (registry.create({ code: w.code, name: w.name, ownerId: w.ownerId, public: w.public, snapshot: w.snapshot })) restored++;
+    }
+    if (restored) log(`restored ${restored} recently-active world(s) from the last ${config.RESTORE_WINDOW_MIN} min`);
+  }
+
   server.listen(config.PORT, config.HOST, () => {
     log(`Gearworks server listening`, { host: config.HOST, port: config.PORT, proto: config.PROTO, env: config.NODE_ENV });
   });

@@ -51,6 +51,10 @@ const config = {
   DATABASE_URL: process.env.DATABASE_URL || '',
   BACKUPS: envInt('BACKUPS', 5),
   LOAD_FILE: flag('--load', process.env.LOAD_FILE || null),
+  // on boot, re-create rooms saved within this window so a restart/deploy or
+  // crash doesn't end live games (RESTORE_ON_BOOT=0 disables).
+  RESTORE_ON_BOOT: process.env.RESTORE_ON_BOOT !== '0',
+  RESTORE_WINDOW_MIN: envInt('RESTORE_WINDOW_MIN', 30),
 
   // simulation / networking
   TICK_MS: 1000 / Core.Config.SIM_HZ,
