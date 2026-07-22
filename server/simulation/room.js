@@ -277,7 +277,7 @@ class Room {
   /* --------------------------- persistence ----------------------------- */
   save(kind) {
     const data = {
-      meta: { name: this.name, code: this.code, ownerId: this.ownerId, saved: Date.now(), kind, seq: ++this.saveSeq },
+      meta: { name: this.name, code: this.code, ownerId: this.ownerId, public: this.public, saved: Date.now(), kind, seq: ++this.saveSeq },
       snapshot: this.game.Snapshot.capture(),
     };
     const ok = this.store.saveRoom(this.code, data);

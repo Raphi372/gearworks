@@ -43,7 +43,10 @@ function waitHealthy(port, timeoutMs = 10000) {
 // the Postgres-backed tests). Returns { port, saveDir, logs, stop }.
 async function startServer(extraEnv = {}) {
   const port = await freePort();
-  const saveDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gw-it-'));
+  // honor a caller-provided SAVE_DIR (restart tests reuse one across servers);
+  // only auto-clean directories we created ourselves.
+  const ownsSaveDir = !extraEnv.SAVE_DIR;
+  const saveDir = extraEnv.SAVE_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'gw-it-'));
   const env = Object.assign({}, process.env, {
     PORT: String(port),
     HOST: '127.0.0.1',
@@ -81,7 +84,7 @@ async function startServer(extraEnv = {}) {
         try { child.kill('SIGTERM'); } catch (_) { cleanup(); resolve(); }
         setTimeout(() => { try { child.kill('SIGKILL'); } catch (_) {} }, 2500).unref();
       });
-      function cleanup() { try { fs.rmSync(saveDir, { recursive: true, force: true }); } catch (_) {} }
+      function cleanup() { if (ownsSaveDir) { try { fs.rmSync(saveDir, { recursive: true, force: true }); } catch (_) {} } }
     },
   };
 }

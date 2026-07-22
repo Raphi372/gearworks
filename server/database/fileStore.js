@@ -65,6 +65,19 @@ function createFileStore(config) {
     } catch (e) { return []; }
   }
 
+  // worlds saved at/after `sinceMs` — for restoring live games on boot
+  function recentRooms(sinceMs) {
+    const out = [];
+    for (const code of listRoomCodes()) {
+      const d = loadRoom(code);
+      if (d && d.meta && (d.meta.saved || 0) >= sinceMs) {
+        out.push({ code, name: d.meta.name, ownerId: d.meta.ownerId || null,
+          public: !!d.meta.public, snapshot: d.snapshot, savedAt: d.meta.saved || 0 });
+      }
+    }
+    return out.sort((a, b) => b.savedAt - a.savedAt);
+  }
+
   // saved worlds owned by an account: scan room saves' meta.ownerId
   function worldsByOwner(ownerId) {
     const out = [];
@@ -86,6 +99,7 @@ function createFileStore(config) {
     loadFile: (p) => Promise.resolve(loadFile(p)),
     listRoomCodes: () => Promise.resolve(listRoomCodes()),
     worldsByOwner: (ownerId) => Promise.resolve(worldsByOwner(ownerId)),
+    recentRooms: (sinceMs) => Promise.resolve(recentRooms(sinceMs)),
     flush: () => Promise.resolve(),
     close: () => Promise.resolve(),
 

@@ -33,10 +33,11 @@ function createPostgresStore(config) {
         const [code, data] = pending.entries().next().value;
         pending.delete(code);
         const ownerId = data.meta.ownerId || null;
+        const isPublic = !!data.meta.public;
         await prisma.world.upsert({
           where: { code },
-          create: { code, name: data.meta.name, snapshot: data.snapshot, savedAt: new Date(), ownerId },
-          update: { name: data.meta.name, snapshot: data.snapshot, savedAt: new Date(), ownerId },
+          create: { code, name: data.meta.name, snapshot: data.snapshot, savedAt: new Date(), ownerId, isPublic },
+          update: { name: data.meta.name, snapshot: data.snapshot, savedAt: new Date(), ownerId, isPublic },
         }).catch((e) => log.error(`pg save failed for room ${code}: ${e.message}`));
       }
     } finally { draining = false; }
@@ -69,6 +70,14 @@ function createPostgresStore(config) {
         orderBy: { savedAt: 'desc' },
       }).catch(() => []);
       return rows.map((r) => ({ code: r.code, name: r.name, savedAt: +r.savedAt }));
+    },
+    async recentRooms(sinceMs) {
+      const rows = await prisma.world.findMany({
+        where: { savedAt: { gte: new Date(sinceMs) } },
+        orderBy: { savedAt: 'desc' },
+      }).catch(() => []);
+      return rows.map((w) => ({ code: w.code, name: w.name, ownerId: w.ownerId,
+        public: w.isPublic, snapshot: w.snapshot, savedAt: +w.savedAt }));
     },
     flush: () => drain(),
     async close() { await drain(); await prisma.$disconnect(); },
