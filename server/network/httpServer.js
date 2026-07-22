@@ -28,7 +28,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self'",
-  "connect-src 'self' ws: wss:",
+  "connect-src 'self' ws: wss: https://gist.githubusercontent.com https://raw.githubusercontent.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

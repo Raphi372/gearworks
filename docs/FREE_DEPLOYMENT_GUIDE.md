@@ -515,13 +515,48 @@ installed), and (c) `https://play.YOURDOMAIN.com/health` returns ok in a browser
 Browsers block `ws://` from an `https://` page — the address **must** be `wss://`
 (it is, automatically, via the tunnel's TLS).
 
-> **Using a Quick Tunnel (no domain)?** Set `BACKEND_URL` to the current
-> `https://xxxx.trycloudflare.com` and redeploy (Pages → Deployments →
-> **Retry deployment**) whenever the tunnel URL changes. Or leave `BACKEND_URL`
-> unset and have players paste the current URL into the Server field — the field
-> exists for exactly this.
+> **Using a Quick Tunnel (no domain)?** The URL rotates on every restart. Rather
+> than re-set `BACKEND_URL` and redeploy each time, use **automatic discovery**
+> (§4.3) — you configure it once and never touch it again.
 
-### 4.3 (Optional) Auto-deploy on every push
+### 4.3 Automatic server discovery (no re-typing, no rebuilds)
+
+**Problem:** a Quick Tunnel's URL changes whenever `cloudflared` restarts, so a
+baked-in `BACKEND_URL` goes stale and you'd have to redeploy Pages (or re-type
+the address on every device). **Fix:** point the client at a small **pointer**
+that always holds the *current* address, and have the tunnel keep that pointer up
+to date automatically. You set a **stable** URL once; its contents rotate.
+
+**One-time setup:**
+1. **Create the pointer.** On [gist.github.com](https://gist.github.com) create a
+   **secret gist** with one file named `server.txt` (any contents for now). Note
+   the gist **ID** (the hash in its URL).
+2. **Get its raw URL.** Click **Raw** on `server.txt` and copy the URL — it looks
+   like `https://gist.githubusercontent.com/<you>/<id>/raw/server.txt`.
+3. **Create a token.** GitHub → Settings → Developer settings → **Fine-grained
+   tokens** → new token with **Gists: Read and write**. Copy it.
+4. **Tell Cloudflare Pages the pointer.** Pages → your project → **Settings →
+   Environment variables** → add **`DISCOVERY_URL`** = the raw gist URL from
+   step 2 → **Save**, then **Deployments → Retry deployment** (this is the *last*
+   Pages redeploy you'll need for server addresses). The client now fetches that
+   pointer on load and connects to whatever it says — discovery **wins** over
+   `BACKEND_URL`.
+5. **Run the tunnel through the updater** instead of the bare command:
+   ```bash
+   GH_TOKEN=github_pat_xxx GIST_ID=<your-gist-id> GIST_FILE=server.txt \
+     ~/gearworks/scripts/tunnel-up.sh
+   ```
+   It starts the quick tunnel *and* writes each new `wss://…trycloudflare.com`
+   into the gist automatically.
+
+**Result:** every device that opens `gearworks.pages.dev` auto-connects to the
+server that's online right now — even after the tunnel URL rotates. No re-typing,
+no redeploys. (A named tunnel from §2.3 makes even this unnecessary, since its URL
+never changes — but discovery is the best experience while you're on a quick
+tunnel.) The CSP already allows the gist host; the pointer may take up to a
+minute to propagate through GitHub's cache.
+
+### 4.4 (Optional) Auto-deploy on every push
 
 Every time you `git push` to `main`, Cloudflare Pages rebuilds and redeploys
 automatically — no action needed. (The repo also contains a
