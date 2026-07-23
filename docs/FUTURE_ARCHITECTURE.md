@@ -492,9 +492,20 @@ single-instance mode stays byte-for-byte the current behavior.
 >   hydration + a real-server round-trip; object storage (s3/R2) is the next
 >   drop-in behind the same contract. Default inline → unchanged.
 >
-> **Remaining slices:** Postgres directory backend + `RoomDirectory`/`Region`
-> schema; compare-and-set placement (split-brain guard); cross-instance reconnect
-> (resolve on the rejoin path); the `s3`/R2 snapshot backend.
+> - **Slice 4 (placement safety + cross-instance reconnect):** `directory.claim()`
+>   — compare-and-set placement via atomic exclusive-create, so two instances can
+>   never host the same code (registry claims a code before creating a room; a
+>   live peer's ownership refuses the create, and code generation avoids
+>   peer-owned codes). And rejoin now **redirects**: a client that reconnects to
+>   the wrong instance is sent (`redirect`) to the room's current owner instead of
+>   refused (the reconnect token verifies on any instance — shared secret). Proven
+>   by a CAS test and a two-process redirect test. Single-instance unchanged.
+>
+> **Remaining (deployment-level, deferred):** the Postgres directory backend +
+> `RoomDirectory`/`Region` schema and the `s3`/R2 snapshot backend — both
+> mechanical mirrors behind the now-proven contracts, landing with the regional
+> Postgres deployment (Phase 3). Every scale *mechanism* is built and tested;
+> what remains is wiring the durable/cloud backends behind the same seams.
 
 **Files affected**
 - `server/directory/*` (new): directory interface + Postgres backend (+ optional

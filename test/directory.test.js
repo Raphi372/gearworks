@@ -141,6 +141,56 @@ test('two instances: a peer resolves the owner\'s room and mints a token the own
   } finally { await A.stop(); await B.stop(); fs.rmSync(shared, { recursive: true, force: true }); }
 });
 
+test('claim() is a compare-and-set placement guard against split-brain', async () => {
+  const shared = fs.mkdtempSync(path.join(os.tmpdir(), 'gw-cas-'));
+  try {
+    const a = createDirectory(dirCfg({ INSTANCE_ID: 'A', PUBLIC_URL: 'ws://A', DIRECTORY: 'file', DIRECTORY_DIR: shared }));
+    const b = createDirectory(dirCfg({ INSTANCE_ID: 'B', PUBLIC_URL: 'ws://B', DIRECTORY: 'file', DIRECTORY_DIR: shared }));
+    assert.strictEqual(a.claim('DUP001', { public: true }), true, 'A wins the first claim');
+    assert.strictEqual(b.claim('DUP001', { public: true }), false, 'B cannot claim a code A owns');
+    assert.strictEqual(a.claim('DUP001', {}), true, 're-claiming our own code is fine');
+    a.deregister('DUP001');
+    assert.strictEqual(b.claim('DUP001', {}), true, 'B claims it once A releases');
+    assert.strictEqual(b.ownedElsewhere('DUP001'), false, 'and B does not consider its own room foreign');
+
+    // a dead (stale) owner can be taken over
+    const s = createDirectory(dirCfg({ INSTANCE_ID: 'C', DIRECTORY: 'file', DIRECTORY_DIR: shared, DIRECTORY_STALE_MS: 1 }));
+    s.claim('STALE1', {});
+    await sleep(15);
+    const t = createDirectory(dirCfg({ INSTANCE_ID: 'D', DIRECTORY: 'file', DIRECTORY_DIR: shared, DIRECTORY_STALE_MS: 1 }));
+    assert.strictEqual(t.claim('STALE1', {}), true, 'a stale route can be taken over');
+  } finally { fs.rmSync(shared, { recursive: true, force: true }); }
+});
+
+test('rejoin redirects to the owning instance when the room moved', async () => {
+  const shared = fs.mkdtempSync(path.join(os.tmpdir(), 'gw-redir-'));
+  const AUTH_SECRET = 'redirect-shared-secret';
+  const common = { AUTH_SECRET, DIRECTORY: 'file', DIRECTORY_DIR: shared, REGION: 'local' };
+  const A = await startServer(Object.assign({}, common, { PUBLIC_URL: 'ws://instance-a' }));
+  const B = await startServer(Object.assign({}, common, { PUBLIC_URL: 'ws://instance-b' }));
+  try {
+    // host a live room on A and capture its reconnect token
+    const host = await connect(A.port); await hello(host);
+    host.send({ t: 'create', roomName: 'Movable', public: true, seed: 74 });
+    const w = await host.next('welcome');
+    const reconnectToken = w.token;
+
+    // a client that lands on B (wrong instance) is redirected to A, not rejected
+    const c = await connect(B.port); await hello(c);
+    c.send({ t: 'rejoin', token: reconnectToken });
+    const red = await c.next((m) => m.t === 'redirect' || m.t === 'err', 4000);
+    assert.strictEqual(red.t, 'redirect', 'redirected rather than refused');
+    assert.strictEqual(red.url, 'ws://instance-a', 'to the owning instance');
+    c.close();
+
+    // and rejoining on A itself still works
+    const c2 = await connect(A.port); await hello(c2);
+    c2.send({ t: 'rejoin', token: reconnectToken });
+    assert.strictEqual((await c2.next('welcome', 4000)).code, w.code, 'rejoined on the owner');
+    host.close(); c2.close();
+  } finally { await A.stop(); await B.stop(); fs.rmSync(shared, { recursive: true, force: true }); }
+});
+
 test('the lobby `resolve` message hands out a connect token the instance accepts', async () => {
   const srv = await startServer({});
   try {

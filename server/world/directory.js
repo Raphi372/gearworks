@@ -32,6 +32,7 @@ function memoryBackend() {
   const m = new Map();
   return {
     put(code, route) { m.set(code, route); },
+    putExclusive(code, route) { if (m.has(code)) return false; m.set(code, route); return true; },   // atomic create
     get(code) { return m.get(code) || null; },
     del(code) { m.delete(code); },
     all() { return Array.from(m.values()); },
@@ -45,6 +46,11 @@ function fileBackend(dir, log) {
     put(code, route) {
       try { fs.writeFileSync(file(code), JSON.stringify(route)); }
       catch (e) { log.error(`directory write failed for ${code}: ${e.message}`); }
+    },
+    // atomic create (O_EXCL): only one instance wins a first claim of a code.
+    putExclusive(code, route) {
+      try { fs.writeFileSync(file(code), JSON.stringify(route), { flag: 'wx' }); return true; }
+      catch (e) { return false; }
     },
     get(code) {
       try { return JSON.parse(fs.readFileSync(file(code), 'utf8')); }
@@ -87,6 +93,23 @@ function createDirectory(config) {
   }
   function deregister(code) { backend.del(code); }
 
+  // Compare-and-set placement (split-brain guard): claim ownership of a code
+  // for THIS instance. Succeeds if the code is unclaimed, already ours, or held
+  // by a dead (stale) instance; fails if a live OTHER instance owns it. The
+  // exclusive create makes the first claim atomic across processes.
+  function claim(code, meta) {
+    const route = { code, instanceId, region, url,
+      name: (meta && meta.name) || code, public: !!(meta && meta.public),
+      players: (meta && meta.players) | 0, updatedAt: Date.now() };
+    if (backend.putExclusive(code, route)) return true;
+    const existing = backend.get(code);
+    if (fresh(existing) && existing.instanceId !== instanceId) return false;   // owned by a live peer
+    backend.put(code, route);                                                  // stale or already ours
+    return true;
+  }
+  // is this code owned by a live instance OTHER than us? (for code generation)
+  function ownedElsewhere(code) { const r = backend.get(code); return fresh(r) && r.instanceId !== instanceId; }
+
   // resolve a code → { instanceId, region, url, players, self } or null (unknown/stale)
   function resolve(code) {
     const r = backend.get(code);
@@ -105,7 +128,7 @@ function createDirectory(config) {
         players: r.players | 0, public: !!r.public, self: r.instanceId === instanceId }));
   }
 
-  return { mode, instanceId, region, url, register, deregister, resolve, list };
+  return { mode, instanceId, region, url, register, deregister, resolve, list, claim, ownedElsewhere };
 }
 
 module.exports = { createDirectory };

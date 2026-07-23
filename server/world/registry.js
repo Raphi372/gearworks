@@ -17,7 +17,9 @@ function createRegistry(config, store, tokens, metrics, directory) {
   function makeCode() {
     const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
     let c;
-    do { c = ''; for (let i = 0; i < 6; i++) c += chars[crypto.randomInt(chars.length)]; } while (rooms.has(c));
+    // avoid codes live locally OR owned by another instance (shared directory)
+    do { c = ''; for (let i = 0; i < 6; i++) c += chars[crypto.randomInt(chars.length)]; }
+    while (rooms.has(c) || (directory && directory.ownedElsewhere(c)));
     return c;
   }
 
@@ -35,9 +37,13 @@ function createRegistry(config, store, tokens, metrics, directory) {
   function create(opts) {
     if (rooms.size >= config.MAX_ROOMS) return null;
     const code = (opts.code && !rooms.has(opts.code)) ? opts.code : makeCode();
+    // claim the code in the directory first (split-brain guard). If a live peer
+    // already owns it (e.g. two instances restoring the same world on boot, or a
+    // resume racing the owner), refuse — the caller routes the client instead.
+    if (directory && !directory.claim(code, { name: opts.name, public: opts.public, players: 0 })) return null;
     const room = new Room(Object.assign({}, opts, { code }), deps);
     rooms.set(code, room);
-    announce(room);          // publish this instance's ownership of the room to the directory
+    announce(room);          // refresh the route with the live room's name/players
     return room;
   }
 
