@@ -15,7 +15,7 @@
 const Core = require('../../shared/core.js');
 const Progression = require('../../shared/progression.js');
 
-function createLobby(config, registry, auth, store, tokens, metrics, directory, presence) {
+function createLobby(config, registry, auth, store, tokens, metrics, directory, presence, invites) {
   return function handleConn(conn) {
     if (metrics) metrics.recordConnection();
     let client = null;    // set once inside a room
@@ -181,6 +181,40 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
             ['friends', 'incoming', 'outgoing'].forEach((k) => (graph[k] || []).forEach((f) => { f.presence = presence.get(f.id); }));
           }
           return conn.send({ t: 'friends', graph, error });
+        }
+        /* ------------------------ world invites ----------------------------- */
+        case 'invite': {
+          // invite a FRIEND into a world you have access to. The invite only
+          // carries a code; the recipient's join still goes through the normal
+          // access checks + connect-token handoff, so it can't bypass authority.
+          if (!account || !invites) return conn.send({ t: 'invited', error: 'sign in first' });
+          const code = String(m.code || '').toUpperCase().trim();
+          const to = String(m.to || '');
+          if (!code || !to) return conn.send({ t: 'invited', error: 'nothing to invite to' });
+          const g = await store.friendGraph(account.id).catch(() => null);
+          if (!g || !g.friends.some((f) => f.id === to)) return conn.send({ t: 'invited', error: 'you can only invite friends' });
+          const inRoom = !!(room && room.code === code);
+          const member = inRoom ? true : (store.membership ? await store.membership(account.id, code).catch(() => null) : null);
+          if (!inRoom && !member) return conn.send({ t: 'invited', error: "you don't have access to that world" });
+          const route = directory ? directory.resolve(code) : null;
+          const name = inRoom ? room.name : (route ? route.name : code);
+          invites.create(account.id, account.username, to, code, name);
+          return conn.send({ t: 'invited', ok: true });
+        }
+        case 'invites':
+          if (!account || !invites) return conn.send({ t: 'invites', invites: [] });
+          return conn.send({ t: 'invites', invites: invites.listFor(account.id) });
+        case 'inviteAccept': {
+          if (!account || !invites) return conn.send({ t: 'invites', invites: [] });
+          const inv = invites.get(String(m.id || ''));
+          if (inv && inv.to === account.id) { invites.remove(inv.id); return conn.send({ t: 'inviteAccepted', code: inv.code }); }
+          return conn.send({ t: 'invites', invites: invites.listFor(account.id) });
+        }
+        case 'inviteDecline': {
+          if (!account || !invites) return conn.send({ t: 'invites', invites: [] });
+          const inv = invites.get(String(m.id || ''));
+          if (inv && inv.to === account.id) invites.remove(inv.id);
+          return conn.send({ t: 'invites', invites: invites.listFor(account.id) });
         }
         case 'create':
           return enterRoom(async () => {

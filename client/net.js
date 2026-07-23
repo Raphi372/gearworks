@@ -162,6 +162,9 @@ function NetSession(_unused, url, cb) {
       case 'progression': cb.progression && cb.progression(m.progression || null); return;
       case 'stats': cb.stats && cb.stats(m.series || null); return;
       case 'friends': cb.friends && cb.friends(m); return;
+      case 'invites': cb.invites && cb.invites(m.invites || []); return;
+      case 'invited': cb.invited && cb.invited(m); return;
+      case 'inviteAccepted': cb.inviteAccepted && cb.inviteAccepted(m); return;
       case 'resolved': { var rf = pendingResolve; pendingResolve = null; if (rf) rf(m); return; }
       case 'redirect':               // the room lives on another instance now — reconnect there
         if (m.url) { url = m.url; redirecting = true; try { ws.close(); } catch (e) {} }
@@ -271,6 +274,10 @@ function NetSession(_unused, url, cb) {
   self.friendResp = function (id, accept) { send({ t: 'friendResp', id: id, accept: accept }); };
   self.friendRemove = function (id) { send({ t: 'friendRemove', id: id }); };
   self.friendBlock = function (id, blocked) { send({ t: 'friendBlock', id: id, blocked: blocked }); };
+  self.requestInvites = function () { send({ t: 'invites' }); };
+  self.sendInvite = function (to, code) { send({ t: 'invite', to: to, code: code }); };
+  self.inviteAccept = function (id) { send({ t: 'inviteAccept', id: id }); };
+  self.inviteDecline = function (id) { send({ t: 'inviteDecline', id: id }); };
   // resolve a code → { url, connectToken, self } via the lobby socket, with a
   // timeout fallback so a slow/absent directory never blocks joining.
   self.resolve = function (code, cbk) {

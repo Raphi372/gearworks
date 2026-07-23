@@ -114,6 +114,17 @@ var Lobby = (function () {
       else if (op === 'remove') browserSess.friendRemove(id);
       else if (op === 'block') browserSess.friendBlock(id, true);
       else if (op === 'unblock') browserSess.friendBlock(id, false);
+      else if (op === 'invite') {
+        var code = (el('lb-code').value || '').trim().toUpperCase();
+        if (code.length !== 6) { err('Enter a world code above, then invite'); return; }
+        browserSess.sendInvite(id, code);
+      }
+    });
+    el('lb-invites').addEventListener('click', function (e) {
+      if (!browserSess) return;
+      var b = e.target.closest('[data-inv]'); if (!b) return;
+      if (b.dataset.inv === 'accept') browserSess.inviteAccept(b.dataset.id);
+      else if (b.dataset.inv === 'decline') browserSess.inviteDecline(b.dataset.id);
     });
     el('reconn-leave').onclick = function () { location.reload(); };
     renderAccount();
@@ -265,7 +276,7 @@ var Lobby = (function () {
     authToken = m.token;
     try { localStorage.setItem('gearworks_token', authToken); } catch (e) {}
     renderAccount();
-    if (browserSess) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestFriends(); }
+    if (browserSess) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestFriends(); browserSess.requestInvites(); }
   }
 
   function onAccount(m) {
@@ -284,6 +295,21 @@ var Lobby = (function () {
     el('lb-progress').innerHTML = '';
     el('lb-stats').innerHTML = '';
     el('lb-friends').innerHTML = '';
+    el('lb-invites').innerHTML = '';
+  }
+
+  function onInvites(list) {
+    var host = el('lb-invites');
+    if (!host) return;
+    if (!account || !list || !list.length) { host.innerHTML = ''; return; }
+    var h = '<div class="divider"></div><b style="font-size:13px">Invites</b>';
+    list.forEach(function (inv) {
+      h += '<div class="world-row"><div><div class="wn">' + esc(inv.name || inv.code) + '</div>' +
+        '<div class="wd">from ' + esc(inv.fromName || 'a friend') + ' • code ' + esc(inv.code) + '</div></div>' +
+        '<div style="display:flex;gap:4px"><button class="btn" data-inv="accept" data-id="' + esc(inv.id) + '">Join</button>' +
+        '<button class="btn gray" data-inv="decline" data-id="' + esc(inv.id) + '">Dismiss</button></div></div>';
+    });
+    host.innerHTML = h;
   }
 
   function presDot(p) {
@@ -304,8 +330,10 @@ var Lobby = (function () {
     if (m.error) h += '<div style="color:#ff7a7a;font-size:11px;margin-bottom:4px">' + esc(m.error) + '</div>';
     g.incoming.forEach(function (f) { h += frRow(f, 'wants to be friends', '<button class="btn" data-fr="accept" data-id="' + esc(f.id) + '">Accept</button><button class="btn gray" data-fr="decline" data-id="' + esc(f.id) + '">Decline</button>'); });
     g.friends.forEach(function (f) {
-      var t = f.presence && f.presence.status === 'ingame' ? 'in a game' : (f.presence && f.presence.online ? 'online' : 'offline');
-      h += frRow(f, t, '<button class="btn gray" data-fr="remove" data-id="' + esc(f.id) + '">Remove</button><button class="btn gray" data-fr="block" data-id="' + esc(f.id) + '">Block</button>');
+      var online = f.presence && f.presence.online;
+      var t = f.presence && f.presence.status === 'ingame' ? 'in a game' : (online ? 'online' : 'offline');
+      var invite = online ? '<button class="btn gray" data-fr="invite" data-id="' + esc(f.id) + '" title="Invite to the world code above">Invite</button>' : '';
+      h += frRow(f, t, invite + '<button class="btn gray" data-fr="remove" data-id="' + esc(f.id) + '">Remove</button><button class="btn gray" data-fr="block" data-id="' + esc(f.id) + '">Block</button>');
     });
     g.outgoing.forEach(function (f) { h += frRow(f, 'request sent', ''); });
     g.blocked.forEach(function (f) { h += frRow(f, 'blocked', '<button class="btn gray" data-fr="unblock" data-id="' + esc(f.id) + '">Unblock</button>'); });
@@ -415,7 +443,7 @@ var Lobby = (function () {
   function reconnectBrowser() {
     // reuse the existing connection only if it targets the same address;
     // discovery/refresh can change the address and must reconnect.
-    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestFriends(); } return; }
+    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestFriends(); browserSess.requestInvites(); } return; }
     if (browserSess) { browserSess.leave(); browserSess = null; }
     savePrefs();
     setDot('warn');
@@ -426,7 +454,7 @@ var Lobby = (function () {
       lobby: function (rooms, m) {
         setDot('on');
         if (m && m.maintenance) el('lb-maint').classList.remove('hidden'); else el('lb-maint').classList.add('hidden');
-        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestFriends(); }
+        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestFriends(); browserSess.requestInvites(); }
         if (pendingVerify) { browserSess.sendVerifyEmail(pendingVerify); pendingVerify = null; }
         browserSess.requestLeaderboard();
         onRooms(rooms);
@@ -438,6 +466,9 @@ var Lobby = (function () {
       progression: function (p) { onProgression(p); },
       stats: function (series) { onStats(series); },
       friends: function (mm) { onFriends(mm); },
+      invites: function (list) { onInvites(list); },
+      invited: function (mm) { if (mm && mm.error) err(mm.error); else if (browserSess) browserSess.requestInvites(); },
+      inviteAccepted: function (mm) { if (mm && mm.code) go({ kind: 'join', code: mm.code }); },
       fail: function (reason) { setDot('off'); onFail(reason); browserSess = null; },
       status: function (s) { if (s === 'offline') setDot('off'); },
     });
