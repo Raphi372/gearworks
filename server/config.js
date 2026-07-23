@@ -75,6 +75,10 @@ const config = {
   DIRECTORY_STALE_MS: envInt('DIRECTORY_STALE_MS', 120000),   // a route unrefreshed this long is dead
   DIRECTORY_HEARTBEAT_MS: envInt('DIRECTORY_HEARTBEAT_MS', 30000),
   CONNECT_TTL_MS: envInt('CONNECT_TTL_MIN', 2) * 60 * 1000,   // connect-token lifetime
+  // where room snapshot blobs live: 'inline' (default) or 'fs' (shared dir), so
+  // any instance can load any room. Object storage (s3/R2) slots in here next.
+  SNAPSHOT_STORE: process.env.SNAPSHOT_STORE || 'inline',
+  SNAPSHOT_DIR: process.env.SNAPSHOT_DIR || '',                // defaults to <SAVE_DIR>/snapshots
 
   // simulation / networking
   TICK_MS: 1000 / Core.Config.SIM_HZ,

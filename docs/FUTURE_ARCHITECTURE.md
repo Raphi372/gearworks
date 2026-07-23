@@ -483,10 +483,18 @@ single-instance mode stays byte-for-byte the current behavior.
 >   joins through the resolve→token path) and a two-process test routes a listed
 >   remote room to its owner. Single-instance behavior unchanged.
 >
-> **Remaining slices:** object-storage snapshot backend + `World.snapshotRef`;
-> Postgres directory backend + `RoomDirectory`/`Region` schema; compare-and-set
-> placement (split-brain guard); cross-instance reconnect (resolve on the rejoin
-> path).
+> - **Slice 3 (externalized snapshots):** `server/database/snapshotStore.js` — a
+>   snapshot blob store behind the store interface, `inline` (default) +
+>   `fs` (shared dir) backends, wired into both file and Postgres backends; the
+>   room save/`World` row keeps only a `snapshotRef` (migration `0006`,
+>   `World.snapshot` nullable) so any instance can load any room. Meta-only reads
+>   (leaderboard/listing) never fetch the blob. Proven by cross-instance
+>   hydration + a real-server round-trip; object storage (s3/R2) is the next
+>   drop-in behind the same contract. Default inline → unchanged.
+>
+> **Remaining slices:** Postgres directory backend + `RoomDirectory`/`Region`
+> schema; compare-and-set placement (split-brain guard); cross-instance reconnect
+> (resolve on the rejoin path); the `s3`/R2 snapshot backend.
 
 **Files affected**
 - `server/directory/*` (new): directory interface + Postgres backend (+ optional

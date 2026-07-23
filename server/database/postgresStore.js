@@ -13,15 +13,27 @@
    ========================================================================== */
 const Progression = require('../../shared/progression.js');
 
-function createPostgresStore(config) {
+function createPostgresStore(config, snapshots) {
   const { DATABASE_URL, log } = config;
   if (!DATABASE_URL) throw new Error('STORAGE=postgres requires DATABASE_URL');
   const STAT_KEEP = config.STAT_KEEP || 168;
+  snapshots = snapshots || { external: false };   // snapshot blob store (inline by default)
 
-  let PrismaClient;
-  try { ({ PrismaClient } = require('@prisma/client')); }
+  let PrismaClient, Prisma;
+  try { ({ PrismaClient, Prisma } = require('@prisma/client')); }
   catch (e) {
     throw new Error('STORAGE=postgres requires the @prisma/client package. Run `npm install` and `npm run db:generate`.');
+  }
+  // when snapshots live externally the JSONB column holds SQL NULL and a
+  // snapshotRef points at the blob; else the snapshot is stored inline as before.
+  function splitSnapshot(code, snapshot) {
+    if (!snapshots.external) return { snapshot, snapshotRef: null };
+    return { snapshot: Prisma ? Prisma.DbNull : null, snapshotRef: snapshots.put(code, snapshot) };
+  }
+  function hydrate(w) {
+    if (!w) return null;
+    const snapshot = (w.snapshotRef && w.snapshot == null) ? snapshots.get(w.snapshotRef) : w.snapshot;
+    return { w, snapshot };
   }
   const prisma = new PrismaClient({ datasources: { db: { url: DATABASE_URL } } });
 
@@ -40,10 +52,11 @@ function createPostgresStore(config) {
         pending.delete(code);
         const ownerId = data.meta.ownerId || null;
         const isPublic = !!data.meta.public;
+        const { snapshot, snapshotRef } = splitSnapshot(code, data.snapshot);
         const w = await prisma.world.upsert({
           where: { code },
-          create: { code, name: data.meta.name, snapshot: data.snapshot, savedAt: new Date(), ownerId, isPublic },
-          update: { name: data.meta.name, snapshot: data.snapshot, savedAt: new Date(), ownerId, isPublic },
+          create: { code, name: data.meta.name, snapshot, snapshotRef, savedAt: new Date(), ownerId, isPublic },
+          update: { name: data.meta.name, snapshot, snapshotRef, savedAt: new Date(), ownerId, isPublic },
         }).catch((e) => { log.error(`pg save failed for room ${code}: ${e.message}`); return null; });
         // derived leaderboard projection (one row per world)
         const p = w && data.meta.projection;
@@ -84,7 +97,9 @@ function createPostgresStore(config) {
     saveRoom(code, data) { pending.set(code, data); drain(); return true; },     // fire-and-forget
     async loadRoom(code) {
       const w = await prisma.world.findUnique({ where: { code } }).catch(() => null);
-      return w ? { meta: { name: w.name, code: w.code, ownerId: w.ownerId }, snapshot: w.snapshot } : null;
+      if (!w) return null;
+      const h = hydrate(w);
+      return { meta: { name: w.name, code: w.code, ownerId: w.ownerId }, snapshot: h.snapshot };
     },
     loadFile: () => Promise.resolve(null),        // not applicable to the DB backend
     async listRoomCodes() {
@@ -174,7 +189,7 @@ function createPostgresStore(config) {
         orderBy: { savedAt: 'desc' },
       }).catch(() => []);
       return rows.map((w) => ({ code: w.code, name: w.name, ownerId: w.ownerId,
-        public: w.isPublic, snapshot: w.snapshot, savedAt: +w.savedAt }));
+        public: w.isPublic, snapshot: hydrate(w).snapshot, savedAt: +w.savedAt }));
     },
     flush: () => drain(),
     async close() { await drain(); await prisma.$disconnect(); },

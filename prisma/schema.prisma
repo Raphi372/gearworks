@@ -46,7 +46,8 @@ model World {
   code       String   @unique          // 6-char invite code
   name       String
   seed       BigInt?
-  snapshot   Json                        // deterministic sim snapshot
+  snapshot   Json?                       // deterministic sim snapshot (null when externalized)
+  snapshotRef String?                    // blob key when the snapshot lives in object/fs storage
   isPublic   Boolean  @default(true)
   savedAt    DateTime @default(now())
   createdAt  DateTime @default(now())
