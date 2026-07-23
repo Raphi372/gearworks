@@ -12,6 +12,7 @@ var Lobby = (function () {
   var account = null;         // { id, username, color, guest } or null
   var authToken = null;       // persisted session token
   var authTab = 'guest';      // guest | login | register
+  var lbScope = 'global';     // leaderboard scope: global | friends
   var forgotOpen = false;     // password-reset sub-form visible
   var resetPrefill = null;    // reset token from an emailed link (?reset=)
   var pendingVerify = null;   // verify token from an emailed link (?verify=)
@@ -84,7 +85,12 @@ var Lobby = (function () {
     }
     el('lb-back').onclick = function () { hide(); el('mainmenu').classList.remove('hidden'); };
     el('lb-refresh').onclick = function () { applyDiscovery(reconnectBrowser); };
-    el('lb-lb-refresh').onclick = function () { if (browserSess) browserSess.requestLeaderboard(); };
+    el('lb-lb-refresh').onclick = function () { if (browserSess) browserSess.requestLeaderboard(lbScope); };
+    el('lb-lb-scope').onclick = function () {
+      lbScope = lbScope === 'friends' ? 'global' : 'friends';
+      el('lb-lb-scope').textContent = lbScope === 'friends' ? 'Global' : 'Friends';
+      if (browserSess) browserSess.requestLeaderboard(lbScope);
+    };
     el('lb-create').onclick = function () {
       go({ kind: 'create', roomName: el('lb-roomname').value || 'Factory World',
         public: el('lb-public').checked, maxPlayers: +el('lb-max').value || 8,
@@ -301,6 +307,8 @@ var Lobby = (function () {
     el('lb-friends').innerHTML = '';
     el('lb-invites').innerHTML = '';
     el('lb-achievements').innerHTML = '';
+    lbScope = 'global'; el('lb-lb-scope').textContent = 'Friends';
+    if (browserSess) browserSess.requestLeaderboard('global');   // back to the global board
   }
 
   function onAchievements(a) {
@@ -446,9 +454,14 @@ var Lobby = (function () {
     if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
     return String(n);
   }
-  function onLeaderboard(rows) {
+  function onLeaderboard(rows, scope) {
     var host = el('lb-leaderboard');
-    if (!rows || !rows.length) { host.innerHTML = '<p style="color:#667;font-size:12px">No factories yet — be the first!</p>'; return; }
+    var sc = el('lb-lb-scope'); if (sc) sc.style.display = account ? '' : 'none';   // Friends toggle needs an account
+    if (!rows || !rows.length) {
+      host.innerHTML = '<p style="color:#667;font-size:12px">' +
+        (scope === 'friends' ? 'No friends on the board yet — add some!' : 'No factories yet — be the first!') + '</p>';
+      return;
+    }
     var mine = account ? account.id : null;
     var h = '';
     rows.forEach(function (r, i) {
@@ -478,13 +491,13 @@ var Lobby = (function () {
         if (m && m.maintenance) el('lb-maint').classList.remove('hidden'); else el('lb-maint').classList.add('hidden');
         if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); }
         if (pendingVerify) { browserSess.sendVerifyEmail(pendingVerify); pendingVerify = null; }
-        browserSess.requestLeaderboard();
+        browserSess.requestLeaderboard(lbScope);
         onRooms(rooms);
       },
       auth: function (m) { onAuth(m); },
       account: function (m) { onAccount(m); },
       myWorlds: function (worlds) { onMyWorlds(worlds); },
-      leaderboard: function (rows) { onLeaderboard(rows); },
+      leaderboard: function (rows, scope) { onLeaderboard(rows, scope); },
       progression: function (p) { onProgression(p); },
       stats: function (series) { onStats(series); },
       achievements: function (a) { onAchievements(a); },

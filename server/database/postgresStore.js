@@ -226,9 +226,10 @@ function createPostgresStore(config, snapshots) {
       }
       return { ok: true };
     },
-    async topFactories(limit) {
+    async topFactories(limit, ownerIds) {
+      const where = (ownerIds && ownerIds.length) ? { world: { ownerId: { in: ownerIds } } } : {};
       const rows = await prisma.factory.findMany({
-        orderBy: { money: 'desc' }, take: limit || 20,
+        where, orderBy: { money: 'desc' }, take: limit || 20,
         include: { world: { select: { code: true, name: true, ownerId: true, savedAt: true, owner: { select: { username: true } } } } },
       }).catch(() => []);
       return rows.map((f) => ({

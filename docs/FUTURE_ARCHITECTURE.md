@@ -581,7 +581,19 @@ achievements, leaderboards, presence, and quickplay matchmaking.
 >   and progress bars. Proven by an evaluator test + an end-to-end check that the
 >   server's achievements equal `evaluate(progression)`.
 >
-> **Remaining slices:** profiles + cosmetics locker; friend-scoped leaderboards.
+> - **Slice 6 (friend-scoped leaderboards):** the existing Factory leaderboard
+>   projection ([DB-6]) filtered to your social graph. `topFactories(limit,
+>   ownerIds)` gains an optional owner-id filter (both backends); the lobby
+>   `leaderboard` handler reads `scope` — `friends` (with an account) resolves
+>   `friendGraph(me) + me` and passes those owner ids, everything else stays
+>   global — and echoes the effective `scope` back so a signed-out `friends`
+>   request degrades to global. A Friends↔Global toggle on the leaderboard panel
+>   (shown only when signed in) with a friends-empty hint. No new store, no new
+>   write path — pure reuse of the derived projection. Proven by an end-to-end
+>   test (global includes a non-friend; friends board = self + friend only;
+>   signed-out friends → global).
+>
+> **Remaining slices:** profiles + cosmetics locker.
 
 **Files affected**
 - `server/social/*`, `server/matchmaking/*`, `server/presence/*` (new control-plane

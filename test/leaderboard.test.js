@@ -69,3 +69,46 @@ if (process.env.TEST_DATABASE_URL) {
 } else {
   test('postgres leaderboard (skipped — set TEST_DATABASE_URL to enable)', { skip: true }, () => {});
 }
+
+async function player(port, name, seed) {
+  const c = await connect(port); await hello(c);
+  c.send({ t: 'auth', mode: 'register', username: name, password: 'pw12345678' });
+  const id = (await c.next('auth')).account.id;
+  c.send({ t: 'create', roomName: name + ' base', public: true, seed });
+  await c.next('welcome');
+  c.send({ t: 'save' }); await c.next('saved', 4000);
+  return { c, id, name };
+}
+
+test('the friends leaderboard shows only you + your friends', async () => {
+  const srv = await startServer({});
+  try {
+    const a = await player(srv.port, uniq('a'), 10);
+    const b = await player(srv.port, uniq('b'), 11);
+    const cc = await player(srv.port, uniq('c'), 12);   // NOT a friend of a
+    // a and b are friends (mutual request auto-accepts)
+    a.c.send({ t: 'friendReq', username: b.name }); await a.c.next('friends');
+    b.c.send({ t: 'friendReq', username: a.name }); await b.c.next('friends');
+
+    // global board includes everyone (incl. the non-friend c)
+    a.c.send({ t: 'leaderboard', scope: 'global' });
+    const g = await a.c.next('leaderboard');
+    assert.strictEqual(g.scope, 'global');
+    assert.ok(new Set(g.rows.map((r) => r.ownerId)).has(cc.id), 'global includes the non-friend');
+
+    // friends board is restricted to a + b (never c)
+    a.c.send({ t: 'leaderboard', scope: 'friends' });
+    const f = await a.c.next('leaderboard');
+    assert.strictEqual(f.scope, 'friends');
+    const fOwners = new Set(f.rows.map((r) => r.ownerId));
+    assert.ok(fOwners.has(a.id) && fOwners.has(b.id), 'includes me and my friend');
+    assert.ok(!fOwners.has(cc.id), 'excludes the non-friend');
+    assert.ok(f.rows.every((r) => r.ownerId === a.id || r.ownerId === b.id), 'only friends + self');
+
+    // signed-out + friends scope just returns the global board
+    const anon = await connect(srv.port); await hello(anon);
+    anon.send({ t: 'leaderboard', scope: 'friends' });
+    assert.strictEqual((await anon.next('leaderboard')).scope, 'global', 'no account → global');
+    a.c.close(); b.c.close(); cc.c.close(); anon.close();
+  } finally { await srv.stop(); }
+});
