@@ -10,7 +10,7 @@
 const crypto = require('crypto');
 const { Room } = require('../simulation/room');
 
-function createRegistry(config, store, tokens, metrics, directory) {
+function createRegistry(config, store, tokens, metrics, directory, presence) {
   const rooms = new Map();     // code -> Room
   let nextPlayerId = 1;
 
@@ -25,7 +25,7 @@ function createRegistry(config, store, tokens, metrics, directory) {
 
   function unregister(code) { rooms.delete(code); if (directory) directory.deregister(code); }
   const deps = {
-    config, store, tokens, metrics,
+    config, store, tokens, metrics, presence,
     newPlayerId: () => nextPlayerId++,
     onClose: unregister,     // room self-removes (idle-evict / destroy) → also drop its route
   };
