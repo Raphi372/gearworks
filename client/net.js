@@ -125,7 +125,7 @@ function NetSession(_unused, url, cb) {
 
   function startTimers() {
     clearInterval(pingTimer); clearInterval(curTimer);
-    pingTimer = setInterval(function () { send({ t: 'ping', ts: performance.now() }); }, 2000);
+    pingTimer = setInterval(function () { send({ t: 'ping', ts: performance.now(), rtt: self.rtt }); }, 2000);
     curTimer = setInterval(function () { cb.pollCursor && cb.pollCursor(); }, 100);
   }
 

@@ -246,7 +246,7 @@ milestone.
 | **Social** (friends, presence, invites, in-app server list) | ❌ Missing | only invite codes + a public browser |
 | **Matchmaking / quickplay** | ❌ Missing | no "find me a game" |
 | **Horizontal scaling** (room-router) | ❌ Missing | single process; designed-for, not built |
-| **Observability** (metrics, dashboards, alerting) | ⚠️ Partial | `/health` + optional error webhook only |
+| **Observability** (metrics, dashboards, alerting) | ✅ | `/metrics` (Prometheus) + `/health` JSON + divergence-spike alert (P1.4) |
 | **Global moderation / admin** | ❌ Missing | in-room host/admin only; no ban/report |
 | **Integration/E2E tests in CI** | ⚠️ Partial | core unit tests only; no net/auth/DB/reconnect tests |
 
@@ -288,9 +288,10 @@ features; P1 = important; P2 = later.**
   ordered same-origin scripts (`app` / `render` / `ui` / `input` / `game` /
   `chat` / `lobby` / `boot`) sharing global scope — no build step, CSP intact
   ([A-2], debt #5).
-- **P1.4 Observability.** Emit counters (rooms, players, ticks/s, RTT p50/p95,
-  divergence rate) and wire alerting; a divergence spike is a cheating/determinism
-  signal ([Q-4]).
+- **P1.4 Observability.** ✅ **Done.** `server/metrics.js` emits counters/gauges
+  (rooms, connections, ticks/s, commands, RTT p50/p95, divergence & resync
+  rates) via `GET /metrics` (Prometheus) and `GET /health` (JSON); a divergence
+  spike (`DIVERGENCE_ALERT_PER_MIN`) warns and fires the error webhook ([Q-4]).
 
 ### P2 — later (scale & depth)
 

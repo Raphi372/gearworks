@@ -60,6 +60,10 @@ const config = {
   // per metric so storage stays bounded.
   STAT_SAMPLE_MIN: envInt('STAT_SAMPLE_MIN', 60),
   STAT_KEEP: envInt('STAT_KEEP', 168),                 // e.g. a week of hourly points
+  // observability: /metrics (Prometheus) + /health JSON. An optional bearer
+  // token gates /metrics; a divergence spike (per minute) triggers an alert.
+  METRICS_TOKEN: process.env.METRICS_TOKEN || '',
+  DIVERGENCE_ALERT_PER_MIN: envInt('DIVERGENCE_ALERT_PER_MIN', 0),   // 0 disables
 
   // simulation / networking
   TICK_MS: 1000 / Core.Config.SIM_HZ,

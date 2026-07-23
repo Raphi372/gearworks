@@ -39,6 +39,8 @@ All via environment variables (12-factor). Defaults in parentheses.
 | `APP_URL` | — | base URL for clickable reset/verify links in email |
 | `MAINTENANCE` | `0` | `1` rejects new games; clients show a banner |
 | `ERROR_WEBHOOK` | — | optional JSON error POST endpoint (Sentry or custom) |
+| `METRICS_TOKEN` | — | optional bearer token gating `GET /metrics` (open if unset) |
+| `DIVERGENCE_ALERT_PER_MIN` | `0` | alert when hash divergences/min cross this (`0` disables) |
 | `GIT_SHA` | `dev` | reported by `/health` as `version` |
 
 > **`AUTH_SECRET` must be a stable secret in production.** Without it the
@@ -72,12 +74,22 @@ All via environment variables (12-factor). Defaults in parentheses.
 
 ## Observability
 
-- `GET /health` → `{ ok, uptime, proto, version, rooms, connections }`. Wired as
-  the Docker `HEALTHCHECK` and the Fly `[[http_service.checks]]`.
+- `GET /health` → `{ ok, uptime, proto, version, rooms, connections, metrics }`.
+  Wired as the Docker `HEALTHCHECK` and the Fly `[[http_service.checks]]`; the
+  `metrics` block mirrors the counters below for a quick eyeball.
+- `GET /metrics` → **Prometheus** text exposition (`server/metrics.js`). Series
+  (all prefixed `gearworks_`): `rooms`, `connections`, `ticks_total`,
+  `ticks_per_second`, `commands_total`, `messages_total`, `connections_total`,
+  `divergences_total`, `resyncs_total`, `errors_total`, `rtt_ms_p50`,
+  `rtt_ms_p95`, `uptime_seconds`. RTT is the client-measured round trip echoed
+  on its ping. Scrape it from Prometheus/Grafana Agent/Fly metrics and alert on
+  `ticks_per_second` dropping, `rtt_ms_p95` climbing, or `divergences_total`
+  rising. Set `METRICS_TOKEN` to require `Authorization: Bearer <token>`.
 - Structured JSON logs in production (one line per event) — ship to the
   platform's log drain (Fly/Railway both aggregate stdout).
 - Divergence events log at `warn` with the room and tick — a spike is a
-  cheating or determinism signal worth alerting on.
+  cheating or determinism signal. Set `DIVERGENCE_ALERT_PER_MIN` and a burst
+  beyond it warns and fires `ERROR_WEBHOOK` (`divergence_spike`) once per minute.
 - **Error tracking:** set `ERROR_WEBHOOK` to a URL and uncaught
   errors/rejections are POSTed as JSON (`server/monitoring.js`) — no SDK, no
   dependency. Point it at a Sentry ingestion endpoint or your own collector.
