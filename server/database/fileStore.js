@@ -97,12 +97,15 @@ function createFileStore(config, snapshots) {
     return out.sort((a, b) => b.savedAt - a.savedAt);
   }
 
-  // global leaderboard: read each save's derived projection, sort by net worth
-  function topFactories(limit) {
+  // leaderboard: read each save's derived projection, sort by net worth.
+  // ownerIds (optional) restricts it to a set of accounts (friend-scoped).
+  function topFactories(limit, ownerIds) {
+    const set = ownerIds && ownerIds.length ? new Set(ownerIds) : null;
     const out = [];
     for (const code of listRoomCodes()) {
       const d = loadMeta(code);
       if (!d || !d.meta) continue;
+      if (set && !set.has(d.meta.ownerId)) continue;
       const p = d.meta.projection || {};
       out.push({ code, name: d.meta.name, ownerId: d.meta.ownerId || null,
         money: p.money | 0, tech: p.tech | 0, entities: p.entities | 0, savedAt: d.meta.saved || 0 });
@@ -261,7 +264,7 @@ function createFileStore(config, snapshots) {
     friendRespond: (me, other, accept) => Promise.resolve(friendRespond(me, other, accept)),
     friendRemove: (me, other) => Promise.resolve(friendRemove(me, other)),
     friendBlock: (me, other, blocked) => Promise.resolve(friendBlock(me, other, blocked)),
-    topFactories: (limit) => Promise.resolve(topFactories(limit || 20)),
+    topFactories: (limit, ownerIds) => Promise.resolve(topFactories(limit || 20, ownerIds)),
     recentRooms: (sinceMs) => Promise.resolve(recentRooms(sinceMs)),
     flush: () => Promise.resolve(),
     close: () => Promise.resolve(),

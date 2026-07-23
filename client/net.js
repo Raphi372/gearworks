@@ -158,7 +158,7 @@ function NetSession(_unused, url, cb) {
         if (reconnectInfo) { reconnectInfo.token = m.token; try { localStorage.setItem('gearworks_reconnect', m.token); } catch (e) {} }
         return;
       case 'myWorlds': cb.myWorlds && cb.myWorlds(m.worlds || []); return;
-      case 'leaderboard': cb.leaderboard && cb.leaderboard(m.rows || []); return;
+      case 'leaderboard': cb.leaderboard && cb.leaderboard(m.rows || [], m.scope || 'global'); return;
       case 'progression': cb.progression && cb.progression(m.progression || null); return;
       case 'stats': cb.stats && cb.stats(m.series || null); return;
       case 'achievements': cb.achievements && cb.achievements(m.achievements || null); return;
@@ -268,7 +268,7 @@ function NetSession(_unused, url, cb) {
   self.sendVerifyEmail = function (token) { send({ t: 'verifyEmail', token: token }); };
   self.sendLogout = function () { send({ t: 'logout' }); };
   self.requestMyWorlds = function () { send({ t: 'myWorlds' }); };
-  self.requestLeaderboard = function () { send({ t: 'leaderboard' }); };
+  self.requestLeaderboard = function (scope) { send({ t: 'leaderboard', scope: scope || 'global' }); };
   self.requestProgression = function () { send({ t: 'progression' }); };
   self.requestStats = function () { send({ t: 'stats' }); };
   self.requestAchievements = function () { send({ t: 'achievements' }); };

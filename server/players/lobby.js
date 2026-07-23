@@ -136,9 +136,15 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
           const worlds = Array.from(byCode.values()).sort((a, b) => b.savedAt - a.savedAt);
           return conn.send({ t: 'myWorlds', worlds });
         }
-        case 'leaderboard': {   // public: top factories by net worth
-          const rows = store.topFactories ? await store.topFactories(20).catch(() => []) : [];
-          return conn.send({ t: 'leaderboard', rows });
+        case 'leaderboard': {   // top factories by net worth — global or friend-scoped
+          let ownerIds = null, scope = 'global';
+          if (m.scope === 'friends' && account && store.friendGraph) {
+            const g = await store.friendGraph(account.id).catch(() => null);
+            ownerIds = (g ? g.friends.map((f) => f.id) : []).concat([account.id]);
+            scope = 'friends';
+          }
+          const rows = store.topFactories ? await store.topFactories(20, ownerIds).catch(() => []) : [];
+          return conn.send({ t: 'leaderboard', rows, scope });
         }
         case 'progression': {   // signed-in: cross-world level / xp / unlocked tech
           if (!account || !store.progression) return conn.send({ t: 'progression', progression: null });
