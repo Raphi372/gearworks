@@ -309,6 +309,7 @@ class Room {
       entities: g.Grid.entities.size,
       money: Math.max(0, Math.round(g.S.money)),
       tech: g.Research.done.size,
+      techIds: Array.from(g.Research.done),   // for the cross-world progression union
       tick: g.S.tick,
     };
   }

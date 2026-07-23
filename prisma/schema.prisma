@@ -92,7 +92,8 @@ model Factory {
   world       World    @relation(fields: [worldId], references: [id], onDelete: Cascade)
   entityCount Int      @default(0)
   money       Int      @default(0)
-  techTier    Int      @default(0)
+  techTier    Int      @default(0)         // count of researched techs
+  techIds     String[] @default([])        // researched tech ids (for the progression union)
   updatedAt   DateTime @updatedAt
 
   @@index([money])                        // leaderboard ordering

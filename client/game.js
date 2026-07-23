@@ -1789,7 +1789,7 @@ var Lobby = (function () {
     authToken = m.token;
     try { localStorage.setItem('gearworks_token', authToken); } catch (e) {}
     renderAccount();
-    if (browserSess) browserSess.requestMyWorlds();
+    if (browserSess) { browserSess.requestMyWorlds(); browserSess.requestProgression(); }
   }
 
   function onAccount(m) {
@@ -1805,6 +1805,25 @@ var Lobby = (function () {
     if (browserSess) browserSess.sendLogout();
     renderAccount();
     el('lb-myworlds').innerHTML = '';
+    el('lb-progress').innerHTML = '';
+  }
+
+  function onProgression(p) {
+    var host = el('lb-progress');
+    if (!host) return;
+    if (!account || !p) { host.innerHTML = ''; return; }
+    var span = Math.max(1, (p.xpNextLevel | 0) - (p.xpThisLevel | 0));
+    var into = Math.max(0, (p.xp | 0) - (p.xpThisLevel | 0));
+    var pct = Math.max(0, Math.min(100, Math.round(into / span * 100)));
+    var techLine = p.unlockedTech && p.unlockedTech.length
+      ? p.unlockedTech.length + ' tech unlocked across your worlds'
+      : 'Research tech in your worlds to unlock more';
+    host.innerHTML =
+      '<div class="lvl-row"><div class="lvl-badge">' + (p.level | 0) + '</div>' +
+      '<div class="lvl-meta"><div class="lvl-top"><span>Level ' + (p.level | 0) + '</span>' +
+        '<span>' + fmtMoney(into) + ' / ' + fmtMoney(span) + ' XP</span></div>' +
+        '<div class="lvl-bar"><span style="width:' + pct + '%"></span></div>' +
+        '<div class="lvl-tech">' + esc(techLine) + '</div></div></div>';
   }
 
   function onMyWorlds(worlds) {
@@ -1850,7 +1869,7 @@ var Lobby = (function () {
   function reconnectBrowser() {
     // reuse the existing connection only if it targets the same address;
     // discovery/refresh can change the address and must reconnect.
-    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) browserSess.requestMyWorlds(); return; }
+    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) { browserSess.requestMyWorlds(); browserSess.requestProgression(); } return; }
     if (browserSess) { browserSess.leave(); browserSess = null; }
     savePrefs();
     setDot('warn');
@@ -1861,7 +1880,7 @@ var Lobby = (function () {
       lobby: function (rooms, m) {
         setDot('on');
         if (m && m.maintenance) el('lb-maint').classList.remove('hidden'); else el('lb-maint').classList.add('hidden');
-        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); }
+        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); }
         if (pendingVerify) { browserSess.sendVerifyEmail(pendingVerify); pendingVerify = null; }
         browserSess.requestLeaderboard();
         onRooms(rooms);
@@ -1870,6 +1889,7 @@ var Lobby = (function () {
       account: function (m) { onAccount(m); },
       myWorlds: function (worlds) { onMyWorlds(worlds); },
       leaderboard: function (rows) { onLeaderboard(rows); },
+      progression: function (p) { onProgression(p); },
       fail: function (reason) { setDot('off'); onFail(reason); browserSess = null; },
       status: function (s) { if (s === 'offline') setDot('off'); },
     });

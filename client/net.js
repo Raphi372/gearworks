@@ -156,6 +156,7 @@ function NetSession(_unused, url, cb) {
         return;
       case 'myWorlds': cb.myWorlds && cb.myWorlds(m.worlds || []); return;
       case 'leaderboard': cb.leaderboard && cb.leaderboard(m.rows || []); return;
+      case 'progression': cb.progression && cb.progression(m.progression || null); return;
       case 'welcome':
         self.myId = m.id; self.token = m.token; self.code = m.code; self.roomName = m.name;
         self.role = m.role; self.autosaveSec = m.autosaveSec;
@@ -254,6 +255,7 @@ function NetSession(_unused, url, cb) {
   self.sendLogout = function () { send({ t: 'logout' }); };
   self.requestMyWorlds = function () { send({ t: 'myWorlds' }); };
   self.requestLeaderboard = function () { send({ t: 'leaderboard' }); };
+  self.requestProgression = function () { send({ t: 'progression' }); };
   self.listRooms = function () { send({ t: 'listRooms' }); };
   self.requestResync = function () { send({ t: 'resync' }); };
   self.pump = function () {};   // sim advances on server messages only

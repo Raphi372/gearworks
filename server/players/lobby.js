@@ -109,6 +109,11 @@ function createLobby(config, registry, auth, store, tokens) {
           const rows = store.topFactories ? await store.topFactories(20).catch(() => []) : [];
           return conn.send({ t: 'leaderboard', rows });
         }
+        case 'progression': {   // signed-in: cross-world level / xp / unlocked tech
+          if (!account || !store.progression) return conn.send({ t: 'progression', progression: null });
+          const p = await store.progression(account.id).catch(() => null);
+          return conn.send({ t: 'progression', progression: p });
+        }
         case 'create':
           return enterRoom(async () => {
             if (config.MAINTENANCE) return conn.send({ t: 'err', reason: 'server is in maintenance — try again shortly' });
