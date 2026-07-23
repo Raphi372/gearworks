@@ -15,7 +15,7 @@
 const Core = require('../../shared/core.js');
 const Progression = require('../../shared/progression.js');
 
-function createLobby(config, registry, auth, store, tokens, metrics, directory) {
+function createLobby(config, registry, auth, store, tokens, metrics, directory, presence) {
   return function handleConn(conn) {
     if (metrics) metrics.recordConnection();
     let client = null;    // set once inside a room
@@ -24,10 +24,14 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory) 
     let hello = null;
     let entering = false; // guards the async create/join/resume window
 
+    function goneOffline() { if (account && presence) presence.clear(account.id); }
     function wire() {
-      conn.onclose = () => { if (room && client) room.removePlayer(client, 'disconnected'); };
+      conn.onclose = () => { goneOffline(); if (room && client) room.removePlayer(client, 'disconnected'); };
     }
-    conn.onclose = () => {};
+    conn.onclose = goneOffline;
+    // mark an authed player online while they sit in the lobby (in-room presence
+    // is refreshed by the room's ping; TTL downgrades a silent/crashed client).
+    function touchOnline() { if (account && presence && !room) presence.set(account.id, { status: 'online' }); }
 
     // identity used when joining: authenticated account (with id, for membership),
     // else the inline name
@@ -61,11 +65,13 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory) 
 
     conn.onmessage = async (m) => {
       if (!m || typeof m.t !== 'string') return;
+      touchOnline();
       switch (m.t) {
         case 'hello': {
           hello = { name: m.name, color: m.color, gz: m.gz };
           if (m.proto !== Core.PROTO) return conn.send({ t: 'err', reason: 'protocol version mismatch — refresh the page' });
           if (m.authToken) account = await auth.fromToken(m.authToken);   // silent auto-login
+          touchOnline();
           conn.send({ t: 'lobby', proto: Core.PROTO, rooms: registry.publicRooms(),
             account: account || null, maintenance: config.MAINTENANCE });
           return;
@@ -88,10 +94,11 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory) 
           else res = { error: 'bad auth mode' };
           if (res.error) return conn.send({ t: 'auth', ok: false, error: res.error });
           account = res.account;
+          touchOnline();
           conn.send({ t: 'auth', ok: true, account: res.account, token: res.token });
           return;
         }
-        case 'logout': account = null; return;
+        case 'logout': goneOffline(); account = null; return;
         case 'setEmail': {
           const r = await auth.setEmail({ account, email: m.email });
           if (r.account) account = r.account;
@@ -169,6 +176,10 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory) 
             await store.friendBlock(account.id, String(m.id || ''), !!m.blocked).catch(() => {});
           }
           const graph = await store.friendGraph(account.id).catch(() => null);
+          // enrich with live presence so the client shows online / in-game
+          if (graph && presence) {
+            ['friends', 'incoming', 'outgoing'].forEach((k) => (graph[k] || []).forEach((f) => { f.presence = presence.get(f.id); }));
+          }
           return conn.send({ t: 'friends', graph, error });
         }
         case 'create':

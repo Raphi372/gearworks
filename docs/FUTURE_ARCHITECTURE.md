@@ -550,9 +550,16 @@ achievements, leaderboards, presence, and quickplay matchmaking.
 > `friendRemove`/`friendBlock`) and a lobby friends panel. Proven by a
 > file-backend state-machine test + an end-to-end lobby test, and browser-
 > verified. Blocking removes the friendship and prevents new requests; mutual
-> requests auto-accept. **Remaining slices:** presence (online/in-game, friend
-> fan-out); profiles + cosmetics locker; achievements; world invites; quickplay
-> matchmaking; friend-scoped leaderboards.
+> requests auto-accept.
+> - **Slice 2 (presence):** `server/presence.js` — ephemeral online/in-game
+>   status kept OUT of the relational store (`local` default | shared `file`,
+>   TTL → offline; Redis slots in later). Set on auth/lobby activity, refreshed
+>   in-game by the room ping, cleared on leave; the `friends` graph is enriched
+>   with each friend's presence and the client shows a status dot. Proven by a
+>   presence-module test + an end-to-end online → in-game → offline test.
+>
+> **Remaining slices:** profiles + cosmetics locker; achievements; world
+> invites; quickplay matchmaking; friend-scoped leaderboards.
 
 **Files affected**
 - `server/social/*`, `server/matchmaking/*`, `server/presence/*` (new control-plane

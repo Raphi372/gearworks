@@ -79,6 +79,11 @@ const config = {
   // any instance can load any room. Object storage (s3/R2) slots in here next.
   SNAPSHOT_STORE: process.env.SNAPSHOT_STORE || 'inline',
   SNAPSHOT_DIR: process.env.SNAPSHOT_DIR || '',                // defaults to <SAVE_DIR>/snapshots
+  // ephemeral presence (online / in-game) for friends. 'local' (single instance)
+  // or 'file' (shared dir). Kept out of the relational store (high-churn).
+  PRESENCE: process.env.PRESENCE || 'local',
+  PRESENCE_DIR: process.env.PRESENCE_DIR || '',               // defaults to <SAVE_DIR>/presence
+  PRESENCE_TTL_MS: envInt('PRESENCE_TTL_MS', 60000),          // presence stale (→ offline) after this
 
   // simulation / networking
   TICK_MS: 1000 / Core.Config.SIM_HZ,

@@ -28,6 +28,9 @@ All via environment variables (12-factor). Defaults in parentheses.
 | `CONNECT_TTL_MIN` | `2` | connect-token lifetime (control-plane → instance handoff) |
 | `SNAPSHOT_STORE` | `inline` | where snapshot blobs live: `inline` or `fs` (shared/mounted dir) |
 | `SNAPSHOT_DIR` | `<SAVE_DIR>/snapshots` | snapshot blobs when `SNAPSHOT_STORE=fs` |
+| `PRESENCE` | `local` | friend presence store: `local` (single instance) or `file` (shared dir) |
+| `PRESENCE_DIR` | `<SAVE_DIR>/presence` | presence files when `PRESENCE=file` |
+| `PRESENCE_TTL_MS` | `60000` | presence goes stale (→ offline) after this |
 | `MAX_ROOMS` | `32` | rooms per process |
 | `MAX_PLAYERS_PER_ROOM` | `16` | seats per room |
 | `MAX_MSG_BYTES` | `524288` | inbound frame cap (flood guard) |

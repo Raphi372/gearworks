@@ -26,6 +26,7 @@ class Room {
     this.newPlayerId = deps.newPlayerId;
     this.onClose = deps.onClose;         // (code) => void, removes us from the registry
     this.metrics = deps.metrics || null; // observability recorder (optional)
+    this.presence = deps.presence || null;   // ephemeral online/in-game status (optional)
 
     this.code = opts.code;
     this.name = String(opts.name || 'Gearworks World').slice(0, 40);
@@ -134,6 +135,7 @@ class Room {
     // record persistent membership for authenticated players (spectators too:
     // they've "been here"); role updates on promotion (see setRole)
     if (c.aid) this.members.set(c.aid, { role, name: c.name });
+    if (this.presence && c.aid) this.presence.set(c.aid, { status: 'ingame', roomCode: this.code });
     this.lastActive = Date.now();
     // full authoritative snapshot -> the joining client
     this.sendSnapshot(c, 'join');
@@ -187,6 +189,7 @@ class Room {
     if (!this.clients.has(c.id)) return;
     this.clients.delete(c.id);
     this.lastActive = Date.now();
+    if (this.presence && c.aid) this.presence.clear(c.aid);   // left the game (TTL also covers crashes)
     this.broadcast({ t: 'pleave', id: c.id, why });
     this.cfg.log(`room ${this.code}: ${c.name} left (${why})`);
     // host migration: promote the longest-connected remaining player
@@ -246,6 +249,7 @@ class Room {
       }
       case 'ping':
         if (this.metrics && m.rtt != null) this.metrics.recordRtt(m.rtt);   // client-measured round trip
+        if (this.presence && c.aid) this.presence.set(c.aid, { status: 'ingame', roomCode: this.code });   // heartbeat in-game presence
         c.conn.sendLossy({ t: 'pong', ts: m.ts, tick: this.game.S.tick });
         break;
       case 'hashReport': {

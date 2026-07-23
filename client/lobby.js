@@ -286,8 +286,12 @@ var Lobby = (function () {
     el('lb-friends').innerHTML = '';
   }
 
+  function presDot(p) {
+    var cls = p && p.status === 'ingame' ? 'ig' : (p && p.online ? 'on' : 'off');
+    return '<span class="pres ' + cls + '"></span>';
+  }
   function frRow(f, tag, actions) {
-    return '<div class="world-row"><div><div class="wn">' + esc(f.username) + '</div>' +
+    return '<div class="world-row"><div><div class="wn">' + presDot(f.presence) + esc(f.username) + '</div>' +
       '<div class="wd">' + esc(tag) + '</div></div><div style="display:flex;gap:4px">' + actions + '</div></div>';
   }
   function onFriends(m) {
@@ -299,7 +303,10 @@ var Lobby = (function () {
       '<div style="display:flex;gap:6px;margin:6px 0"><input class="txt" id="fr-add" placeholder="add by username" style="flex:1;margin:0" maxlength="20"><button class="btn gray" id="fr-add-go">Add</button></div>';
     if (m.error) h += '<div style="color:#ff7a7a;font-size:11px;margin-bottom:4px">' + esc(m.error) + '</div>';
     g.incoming.forEach(function (f) { h += frRow(f, 'wants to be friends', '<button class="btn" data-fr="accept" data-id="' + esc(f.id) + '">Accept</button><button class="btn gray" data-fr="decline" data-id="' + esc(f.id) + '">Decline</button>'); });
-    g.friends.forEach(function (f) { h += frRow(f, 'friend', '<button class="btn gray" data-fr="remove" data-id="' + esc(f.id) + '">Remove</button><button class="btn gray" data-fr="block" data-id="' + esc(f.id) + '">Block</button>'); });
+    g.friends.forEach(function (f) {
+      var t = f.presence && f.presence.status === 'ingame' ? 'in a game' : (f.presence && f.presence.online ? 'online' : 'offline');
+      h += frRow(f, t, '<button class="btn gray" data-fr="remove" data-id="' + esc(f.id) + '">Remove</button><button class="btn gray" data-fr="block" data-id="' + esc(f.id) + '">Block</button>');
+    });
     g.outgoing.forEach(function (f) { h += frRow(f, 'request sent', ''); });
     g.blocked.forEach(function (f) { h += frRow(f, 'blocked', '<button class="btn gray" data-fr="unblock" data-id="' + esc(f.id) + '">Unblock</button>'); });
     if (!g.incoming.length && !g.friends.length && !g.outgoing.length && !g.blocked.length) {
