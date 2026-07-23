@@ -566,8 +566,16 @@ achievements, leaderboards, presence, and quickplay matchmaking.
 >   Invite button on online friends. Proven by a module test + an end-to-end
 >   lobby test (invite → list → accept + authz).
 >
-> **Remaining slices:** profiles + cosmetics locker; achievements; quickplay
-> matchmaking; friend-scoped leaderboards.
+> - **Slice 4 (quickplay matchmaking):** a lobby `quickplay` that scans the
+>   aggregated public listing for a room with a free seat — this region first,
+>   fuller rooms first so players congregate — and returns its code, else tells
+>   the client to host one; private/full rooms are never matched. Room capacity
+>   is carried in directory routes so it works cross-instance. A "⚡ Quick Play"
+>   button drives it. Proven by a matchmaking test (match / full → create /
+>   private skipped / prefer-fuller) and browser-verified end to end.
+>
+> **Remaining slices:** profiles + cosmetics locker; achievements; friend-scoped
+> leaderboards.
 
 **Files affected**
 - `server/social/*`, `server/matchmaking/*`, `server/presence/*` (new control-plane

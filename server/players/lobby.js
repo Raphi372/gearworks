@@ -216,6 +216,20 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
           if (inv && inv.to === account.id) invites.remove(inv.id);
           return conn.send({ t: 'invites', invites: invites.listFor(account.id) });
         }
+        case 'quickplay': {
+          // "find me a game": the best public room with a free seat (this region
+          // first, fuller rooms first so players congregate), else tell the
+          // client to host one. The join/create still runs the normal flow.
+          const region = config.REGION;
+          const joinable = registry.publicRooms()
+            .filter((r) => (r.maxPlayers ? r.players < r.maxPlayers : true))
+            .sort((a, b) => {
+              const ra = (a.region === region ? 0 : 1), rb = (b.region === region ? 0 : 1);
+              return ra !== rb ? ra - rb : b.players - a.players;
+            });
+          if (joinable.length) return conn.send({ t: 'quickplay', code: joinable[0].code });
+          return conn.send({ t: 'quickplay', create: true });
+        }
         case 'create':
           return enterRoom(async () => {
             if (config.MAINTENANCE) return conn.send({ t: 'err', reason: 'server is in maintenance — try again shortly' });
