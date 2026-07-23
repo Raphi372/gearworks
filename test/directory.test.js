@@ -140,3 +140,54 @@ test('two instances: a peer resolves the owner\'s room and mints a token the own
     owner.close(); joiner.close();
   } finally { await A.stop(); await B.stop(); fs.rmSync(shared, { recursive: true, force: true }); }
 });
+
+test('the lobby `resolve` message hands out a connect token the instance accepts', async () => {
+  const srv = await startServer({});
+  try {
+    const host = await connect(srv.port); await hello(host);
+    host.send({ t: 'create', roomName: 'Router2', public: true, seed: 72 });
+    const code = (await host.next('welcome')).code;
+
+    // a second client resolves over the lobby socket (CSP-safe control channel)
+    const c = await connect(srv.port); await hello(c);
+    c.send({ t: 'resolve', code });
+    const r = await c.next('resolved');
+    assert.strictEqual(r.self, true, 'single instance resolves to itself');
+    assert.ok(r.connectToken, 'connect token issued over the socket');
+    c.send({ t: 'join', code, connectToken: r.connectToken });
+    assert.strictEqual((await c.next('welcome')).code, code, 'the resolve-issued token is accepted');
+    host.close(); c.close();
+  } finally { await srv.stop(); }
+});
+
+test('the public listing and lobby resolve span instances', async () => {
+  const shared = fs.mkdtempSync(path.join(os.tmpdir(), 'gw-dir3-'));
+  const AUTH_SECRET = 'agg-shared-secret';
+  const common = { AUTH_SECRET, DIRECTORY: 'file', DIRECTORY_DIR: shared, REGION: 'eu' };
+  const A = await startServer(Object.assign({}, common, { PUBLIC_URL: 'ws://instance-a' }));
+  const B = await startServer(Object.assign({}, common, { PUBLIC_URL: 'ws://instance-b' }));
+  try {
+    const owner = await connect(A.port); await hello(owner);
+    owner.send({ t: 'create', roomName: 'Shared World', public: true, seed: 73 });
+    const code = (await owner.next('welcome')).code;
+
+    // instance B's public listing includes A's room as a remote row
+    const cB = await connect(B.port);
+    const lob = await hello(cB);
+    const row = (lob.rooms || []).find((x) => x.code === code);
+    assert.ok(row, 'B lists the room hosted on A');
+    assert.strictEqual(row.here, false, 'flagged as remote');
+    assert.strictEqual(row.name, 'Shared World', 'remote name surfaced');
+    assert.strictEqual(row.region, 'eu');
+
+    // resolving it over B routes to A + a token A accepts
+    cB.send({ t: 'resolve', code });
+    const r = await cB.next('resolved');
+    assert.strictEqual(r.self, false);
+    assert.strictEqual(r.url, 'ws://instance-a');
+    const joiner = await connect(A.port); await hello(joiner);
+    joiner.send({ t: 'join', code, connectToken: r.connectToken });
+    assert.strictEqual((await joiner.next('welcome', 4000)).code, code, 'routed join seated on A');
+    owner.close(); cB.close(); joiner.close();
+  } finally { await A.stop(); await B.stop(); fs.rmSync(shared, { recursive: true, force: true }); }
+});

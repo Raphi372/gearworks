@@ -79,6 +79,7 @@ function createDirectory(config) {
   function register(code, meta) {
     backend.put(code, {
       code, instanceId, region, url,
+      name: (meta && meta.name) || code,
       public: !!(meta && meta.public),
       players: (meta && meta.players) | 0,
       updatedAt: Date.now(),
@@ -100,8 +101,8 @@ function createDirectory(config) {
     return backend.all().filter((r) => fresh(r)
       && (filter.public === undefined || !!r.public === !!filter.public)
       && (filter.region === undefined || r.region === filter.region))
-      .map((r) => ({ code: r.code, region: r.region, url: r.url, players: r.players | 0,
-        public: !!r.public, self: r.instanceId === instanceId }));
+      .map((r) => ({ code: r.code, name: r.name || r.code, region: r.region, url: r.url,
+        players: r.players | 0, public: !!r.public, self: r.instanceId === instanceId }));
   }
 
   return { mode, instanceId, region, url, register, deregister, resolve, list };

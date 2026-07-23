@@ -86,6 +86,7 @@ function NetSession(_unused, url, cb) {
   var attempts = 0;
   var intent = null;             // what to send once socket opens
   var closedByUser = false;
+  var pendingResolve = null;     // one-shot callback for a 'resolved' reply
 
   function setStatus(s) { self.status = s; cb.status && cb.status(s); }
 
@@ -144,8 +145,8 @@ function NetSession(_unused, url, cb) {
         cb.lobby && cb.lobby(m.rooms, m);      // m carries account + maintenance
         if (intent.kind === 'create') send({ t: 'create', roomName: intent.roomName, public: intent.public,
           maxPlayers: intent.maxPlayers, spectate: intent.spectate, seed: intent.seed });
-        else if (intent.kind === 'join') send({ t: 'join', code: intent.code, spectate: intent.spectate });
-        else if (intent.kind === 'resume') send({ t: 'resume', code: intent.code, public: intent.public });
+        else if (intent.kind === 'join') send({ t: 'join', code: intent.code, spectate: intent.spectate, connectToken: intent.connectToken || null });
+        else if (intent.kind === 'resume') send({ t: 'resume', code: intent.code, public: intent.public, connectToken: intent.connectToken || null });
         else if (intent.kind === 'browse') setStatus('lobby');
         return;
       case 'auth': cb.auth && cb.auth(m); return;
@@ -158,6 +159,7 @@ function NetSession(_unused, url, cb) {
       case 'leaderboard': cb.leaderboard && cb.leaderboard(m.rows || []); return;
       case 'progression': cb.progression && cb.progression(m.progression || null); return;
       case 'stats': cb.stats && cb.stats(m.series || null); return;
+      case 'resolved': { var rf = pendingResolve; pendingResolve = null; if (rf) rf(m); return; }
       case 'welcome':
         self.myId = m.id; self.token = m.token; self.code = m.code; self.roomName = m.name;
         self.role = m.role; self.autosaveSec = m.autosaveSec;
@@ -258,6 +260,15 @@ function NetSession(_unused, url, cb) {
   self.requestLeaderboard = function () { send({ t: 'leaderboard' }); };
   self.requestProgression = function () { send({ t: 'progression' }); };
   self.requestStats = function () { send({ t: 'stats' }); };
+  // resolve a code → { url, connectToken, self } via the lobby socket, with a
+  // timeout fallback so a slow/absent directory never blocks joining.
+  self.resolve = function (code, cbk) {
+    var done = false;
+    function finish(m) { if (done) return; done = true; pendingResolve = null; cbk(m); }
+    pendingResolve = finish;
+    send({ t: 'resolve', code: code });
+    setTimeout(function () { finish(null); }, 2000);
+  };
   self.listRooms = function () { send({ t: 'listRooms' }); };
   self.requestResync = function () { send({ t: 'resync' }); };
   self.pump = function () {};   // sim advances on server messages only

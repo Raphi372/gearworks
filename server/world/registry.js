@@ -29,7 +29,7 @@ function createRegistry(config, store, tokens, metrics, directory) {
   };
 
   function announce(room) {
-    if (directory) directory.register(room.code, { public: room.public, players: room.nonSpectators() });
+    if (directory) directory.register(room.code, { name: room.name, public: room.public, players: room.nonSpectators() });
   }
 
   function create(opts) {
@@ -45,14 +45,28 @@ function createRegistry(config, store, tokens, metrics, directory) {
 
   function publicRooms() {
     const list = [];
+    const seen = new Set();
     for (const r of rooms.values()) {
       if (!r.public) continue;
+      seen.add(r.code);
       list.push({
         code: r.code, name: r.name,
         players: r.nonSpectators(),
         spectators: r.clients.size - r.nonSpectators(),
         maxPlayers: r.maxPlayers, tick: r.game.S.tick,
+        region: config.REGION, here: true,
       });
+    }
+    // aggregate public rooms hosted on OTHER instances (multi-instance browser).
+    // Remote rows carry only what the directory knows; joining one resolves to
+    // its owning instance via the connect-token handoff. No-op in 'local' mode.
+    if (directory) {
+      for (const rt of directory.list({ public: true })) {
+        if (rt.self || seen.has(rt.code)) continue;
+        seen.add(rt.code);
+        list.push({ code: rt.code, name: rt.name, players: rt.players, maxPlayers: 0,
+          tick: 0, region: rt.region, url: rt.url, here: false });
+      }
     }
     return list;
   }

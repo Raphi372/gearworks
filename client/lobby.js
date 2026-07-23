@@ -407,8 +407,10 @@ var Lobby = (function () {
     if (!rooms || !rooms.length) { host.innerHTML = '<p style="color:#667;font-size:12px">No public games yet — host one below!</p>'; return; }
     var h = '';
     rooms.forEach(function (r) {
+      var cap = r.maxPlayers ? (r.players + '/' + r.maxPlayers + ' players') : (r.players + ' online');
+      var reg = (r.region && r.region !== 'local') ? ' • ' + esc(r.region) : '';
       h += '<div class="roomrow"><div><div class="rn">' + esc(r.name) + '</div>' +
-        '<div class="rd">' + r.players + '/' + r.maxPlayers + ' players' + (r.spectators ? ' +' + r.spectators + ' 👁' : '') + ' • code ' + esc(r.code) + '</div></div>' +
+        '<div class="rd">' + cap + (r.spectators ? ' +' + r.spectators + ' 👁' : '') + ' • code ' + esc(r.code) + reg + '</div></div>' +
         '<button class="btn" data-roomcode="' + esc(r.code) + '">Join</button></div>';
     });
     host.innerHTML = h;
@@ -444,11 +446,24 @@ var Lobby = (function () {
 
   function go(intent) {
     savePrefs();
-    if (browserSess) { browserSess.leave(); browserSess = null; }
     intent.name = account ? account.username : (el('lb-name').value || 'Engineer');
     intent.color = color;
     intent.authToken = authToken;
     err('Connecting…');
+    // For a coded join/resume, ask the connected lobby to resolve the room to
+    // its owning instance and hand us a signed connect token (§4.3). Single
+    // instance → self:true with our own address, so the flow is unchanged. If
+    // there's no lobby socket or resolve times out, fall straight through.
+    var canResolve = browserSess && (intent.kind === 'join' || intent.kind === 'resume') && intent.code;
+    if (canResolve) {
+      browserSess.resolve(intent.code, function (res) {
+        if (browserSess) { browserSess.leave(); browserSess = null; }
+        if (res && res.connectToken) intent.connectToken = res.connectToken;
+        Game.startNet((res && res.url) || el('lb-server').value, intent);
+      });
+      return;
+    }
+    if (browserSess) { browserSess.leave(); browserSess = null; }
     Game.startNet(el('lb-server').value, intent);
   }
 

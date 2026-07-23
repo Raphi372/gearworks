@@ -15,7 +15,7 @@
 const Core = require('../../shared/core.js');
 const Progression = require('../../shared/progression.js');
 
-function createLobby(config, registry, auth, store, tokens, metrics) {
+function createLobby(config, registry, auth, store, tokens, metrics, directory) {
   return function handleConn(conn) {
     if (metrics) metrics.recordConnection();
     let client = null;    // set once inside a room
@@ -105,6 +105,17 @@ function createLobby(config, registry, auth, store, tokens, metrics) {
         case 'listRooms':
           conn.send({ t: 'lobby', proto: Core.PROTO, rooms: registry.publicRooms(), account: account || null, maintenance: config.MAINTENANCE });
           return;
+        case 'resolve': {
+          // control handoff over the lobby socket (CSP-safe, no cross-origin
+          // fetch): resolve a code to its owning instance + a signed connect
+          // token the owner will verify. Unknown/dormant code → this instance
+          // will host it (self:true). See docs/FUTURE_ARCHITECTURE.md §4.3.
+          const rc = String(m.code || '').toUpperCase().trim();
+          const route = directory ? directory.resolve(rc) : null;
+          const region = route ? route.region : config.REGION;
+          const connectToken = tokens.sign('connect', { aid: account ? account.id : null, room: rc, region }, config.CONNECT_TTL_MS);
+          return conn.send({ t: 'resolved', code: rc, self: route ? route.self : true, url: route ? route.url : '', region, connectToken });
+        }
         case 'myWorlds': {
           if (!account || !store.accountsEnabled) return conn.send({ t: 'myWorlds', worlds: [] });
           const [owned, joined] = await Promise.all([
