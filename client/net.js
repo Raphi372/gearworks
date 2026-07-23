@@ -86,6 +86,7 @@ function NetSession(_unused, url, cb) {
   var attempts = 0;
   var intent = null;             // what to send once socket opens
   var closedByUser = false;
+  var redirecting = false;       // rejoin is being routed to a different instance
   var pendingResolve = null;     // one-shot callback for a 'resolved' reply
 
   function setStatus(s) { self.status = s; cb.status && cb.status(s); }
@@ -107,6 +108,7 @@ function NetSession(_unused, url, cb) {
     ws.onmessage = function (ev) { onMsg(JSON.parse(ev.data)); };
     ws.onclose = function () {
       stopTimers();
+      if (redirecting) { redirecting = false; connect(); return; }   // rejoin moved to another instance
       if (closedByUser) return;
       if (reconnectInfo) {
         // in-game drop: try to resume the session automatically
@@ -160,6 +162,9 @@ function NetSession(_unused, url, cb) {
       case 'progression': cb.progression && cb.progression(m.progression || null); return;
       case 'stats': cb.stats && cb.stats(m.series || null); return;
       case 'resolved': { var rf = pendingResolve; pendingResolve = null; if (rf) rf(m); return; }
+      case 'redirect':               // the room lives on another instance now — reconnect there
+        if (m.url) { url = m.url; redirecting = true; try { ws.close(); } catch (e) {} }
+        return;
       case 'welcome':
         self.myId = m.id; self.token = m.token; self.code = m.code; self.roomName = m.name;
         self.role = m.role; self.autosaveSec = m.autosaveSec;

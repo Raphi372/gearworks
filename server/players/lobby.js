@@ -206,7 +206,14 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory) 
             const d = tokens.verify('reconnect', String(m.token || ''));
             if (!d) return conn.send({ t: 'err', reason: 'session expired' });
             const r = registry.get(d.room);
-            if (!r) return conn.send({ t: 'err', reason: 'that game is no longer available' });
+            if (!r) {
+              // not on this instance — if the room moved to a live peer, redirect
+              // the client there (the reconnect token verifies on any instance —
+              // shared AUTH_SECRET). See docs/FUTURE_ARCHITECTURE.md §4.3.
+              const route = directory ? directory.resolve(d.room) : null;
+              if (route && !route.self && route.url) return conn.send({ t: 'redirect', url: route.url, code: d.room });
+              return conn.send({ t: 'err', reason: 'that game is no longer available' });
+            }
             // re-seat with the token's identity; a stale 'host' token can't hijack
             // an existing host — it rejoins as a player instead.
             let role = d.role;
