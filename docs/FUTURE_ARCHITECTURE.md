@@ -544,6 +544,16 @@ single-instance mode stays byte-for-byte the current behavior.
 **Goal:** the "platform" layer — friends, invites, profiles, cosmetics,
 achievements, leaderboards, presence, and quickplay matchmaking.
 
+> **Status — Slice 1 landed (social graph).** `Friendship` (schema + migration
+> `0007`, both backends) with the request/accept/decline/remove/block state
+> machine, served over the lobby (`friends`/`friendReq`/`friendResp`/
+> `friendRemove`/`friendBlock`) and a lobby friends panel. Proven by a
+> file-backend state-machine test + an end-to-end lobby test, and browser-
+> verified. Blocking removes the friendship and prevents new requests; mutual
+> requests auto-accept. **Remaining slices:** presence (online/in-game, friend
+> fan-out); profiles + cosmetics locker; achievements; world invites; quickplay
+> matchmaking; friend-scoped leaderboards.
+
 **Files affected**
 - `server/social/*`, `server/matchmaking/*`, `server/presence/*` (new control-plane
   services + their store methods).

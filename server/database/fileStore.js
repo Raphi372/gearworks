@@ -186,6 +186,62 @@ function createFileStore(config, snapshots) {
   }
   function statsFor(accountId) { return loadStats()[accountId] || {}; }
 
+  /* -------- social graph: friends / requests / blocks (JSON on disk) -------- */
+  const friendsPath = path.join(SAVE_DIR, 'friends.json');
+  let friends = null;
+  function loadFriends() {
+    if (friends) return friends;
+    try { friends = JSON.parse(fs.readFileSync(friendsPath, 'utf8')); } catch (e) { friends = {}; }
+    if (!friends || typeof friends !== 'object') friends = {};
+    return friends;
+  }
+  function persistFriends() {
+    try { fs.writeFileSync(friendsPath, JSON.stringify(loadFriends())); }
+    catch (e) { log.error(`friends save failed: ${e.message}`); }
+  }
+  // per-account adjacency: fr(iends), out(going req), in(coming req), bl(ocked)
+  function rec(g, id) { return g[id] || (g[id] = { fr: {}, out: {}, in: {}, bl: {} }); }
+  function uname(id) { const a = loadAccounts().byId[id]; return a ? a.username : null; }
+  function resolveIds(map) { return Object.keys(map || {}).map((id) => ({ id, username: uname(id) })).filter((x) => x.username); }
+
+  function friendGraph(id) {
+    const me = rec(loadFriends(), id);
+    return { friends: resolveIds(me.fr), incoming: resolveIds(me.in), outgoing: resolveIds(me.out), blocked: resolveIds(me.bl) };
+  }
+  function acceptInner(g, me, other) {
+    const a = rec(g, me), b = rec(g, other);
+    delete a.in[other]; delete b.out[me]; delete a.out[other]; delete b.in[me];
+    a.fr[other] = Date.now(); b.fr[me] = Date.now();
+    persistFriends(); return { ok: true };
+  }
+  function friendRequest(from, to) {
+    if (!from || !to || from === to) return { error: 'invalid target' };
+    const g = loadFriends(); const a = rec(g, from), b = rec(g, to);
+    if (a.bl[to] || b.bl[from]) return { error: 'unavailable' };
+    if (a.fr[to]) return { ok: true };                 // already friends
+    if (a.in[to]) return acceptInner(g, from, to);     // they already asked → accept
+    a.out[to] = Date.now(); b.in[from] = Date.now();
+    persistFriends(); return { ok: true };
+  }
+  function friendRespond(me, other, accept) {
+    const g = loadFriends(); const a = rec(g, me), b = rec(g, other);
+    if (!a.in[other]) return { error: 'no pending request' };
+    if (accept) return acceptInner(g, me, other);
+    delete a.in[other]; delete b.out[me]; persistFriends(); return { ok: true };
+  }
+  function friendRemove(me, other) {
+    const g = loadFriends(); const a = rec(g, me), b = rec(g, other);
+    delete a.fr[other]; delete b.fr[me]; delete a.out[other]; delete b.in[me]; delete a.in[other]; delete b.out[me];
+    persistFriends(); return { ok: true };
+  }
+  function friendBlock(me, other, blocked) {
+    if (!other || me === other) return { error: 'invalid target' };
+    const g = loadFriends(); const a = rec(g, me), b = rec(g, other);
+    if (blocked) { a.bl[other] = Date.now(); delete a.fr[other]; delete b.fr[me]; delete a.out[other]; delete b.in[me]; delete a.in[other]; delete b.out[me]; }
+    else delete a.bl[other];
+    persistFriends(); return { ok: true };
+  }
+
   return {
     kind: 'file',
     accountsEnabled: true,
@@ -200,6 +256,11 @@ function createFileStore(config, snapshots) {
     progression: (aid) => Promise.resolve(progression(aid)),
     recordStats: (aid, samples, at) => { recordStats(aid, samples, at); return Promise.resolve(); },
     statsFor: (aid) => Promise.resolve(statsFor(aid)),
+    friendGraph: (id) => Promise.resolve(friendGraph(id)),
+    friendRequest: (from, to) => Promise.resolve(friendRequest(from, to)),
+    friendRespond: (me, other, accept) => Promise.resolve(friendRespond(me, other, accept)),
+    friendRemove: (me, other) => Promise.resolve(friendRemove(me, other)),
+    friendBlock: (me, other, blocked) => Promise.resolve(friendBlock(me, other, blocked)),
     topFactories: (limit) => Promise.resolve(topFactories(limit || 20)),
     recentRooms: (sinceMs) => Promise.resolve(recentRooms(sinceMs)),
     flush: () => Promise.resolve(),

@@ -103,6 +103,18 @@ var Lobby = (function () {
       var b = e.target.closest('[data-resume]');
       if (b) go({ kind: 'resume', code: b.dataset.resume, public: false });
     });
+    el('lb-friends').addEventListener('click', function (e) {
+      if (!browserSess) return;
+      var add = e.target.closest('#fr-add-go');
+      if (add) { var u = (el('fr-add').value || '').trim(); if (u) browserSess.friendReq(u); return; }
+      var b = e.target.closest('[data-fr]'); if (!b) return;
+      var id = b.dataset.id, op = b.dataset.fr;
+      if (op === 'accept') browserSess.friendResp(id, true);
+      else if (op === 'decline') browserSess.friendResp(id, false);
+      else if (op === 'remove') browserSess.friendRemove(id);
+      else if (op === 'block') browserSess.friendBlock(id, true);
+      else if (op === 'unblock') browserSess.friendBlock(id, false);
+    });
     el('reconn-leave').onclick = function () { location.reload(); };
     renderAccount();
     applyDiscovery();   // pre-warm the current server address before Multiplayer is opened
@@ -253,7 +265,7 @@ var Lobby = (function () {
     authToken = m.token;
     try { localStorage.setItem('gearworks_token', authToken); } catch (e) {}
     renderAccount();
-    if (browserSess) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); }
+    if (browserSess) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestFriends(); }
   }
 
   function onAccount(m) {
@@ -271,6 +283,29 @@ var Lobby = (function () {
     el('lb-myworlds').innerHTML = '';
     el('lb-progress').innerHTML = '';
     el('lb-stats').innerHTML = '';
+    el('lb-friends').innerHTML = '';
+  }
+
+  function frRow(f, tag, actions) {
+    return '<div class="world-row"><div><div class="wn">' + esc(f.username) + '</div>' +
+      '<div class="wd">' + esc(tag) + '</div></div><div style="display:flex;gap:4px">' + actions + '</div></div>';
+  }
+  function onFriends(m) {
+    var host = el('lb-friends');
+    if (!host) return;
+    if (!account || !m || !m.graph) { host.innerHTML = ''; return; }
+    var g = m.graph;
+    var h = '<div class="divider"></div><b style="font-size:13px">Friends</b>' +
+      '<div style="display:flex;gap:6px;margin:6px 0"><input class="txt" id="fr-add" placeholder="add by username" style="flex:1;margin:0" maxlength="20"><button class="btn gray" id="fr-add-go">Add</button></div>';
+    if (m.error) h += '<div style="color:#ff7a7a;font-size:11px;margin-bottom:4px">' + esc(m.error) + '</div>';
+    g.incoming.forEach(function (f) { h += frRow(f, 'wants to be friends', '<button class="btn" data-fr="accept" data-id="' + esc(f.id) + '">Accept</button><button class="btn gray" data-fr="decline" data-id="' + esc(f.id) + '">Decline</button>'); });
+    g.friends.forEach(function (f) { h += frRow(f, 'friend', '<button class="btn gray" data-fr="remove" data-id="' + esc(f.id) + '">Remove</button><button class="btn gray" data-fr="block" data-id="' + esc(f.id) + '">Block</button>'); });
+    g.outgoing.forEach(function (f) { h += frRow(f, 'request sent', ''); });
+    g.blocked.forEach(function (f) { h += frRow(f, 'blocked', '<button class="btn gray" data-fr="unblock" data-id="' + esc(f.id) + '">Unblock</button>'); });
+    if (!g.incoming.length && !g.friends.length && !g.outgoing.length && !g.blocked.length) {
+      h += '<div class="acc-guest">Add friends by username to see them here.</div>';
+    }
+    host.innerHTML = h;
   }
 
   // an inline-SVG sparkline (CSP-safe: no external libs, no inline handlers)
@@ -373,7 +408,7 @@ var Lobby = (function () {
   function reconnectBrowser() {
     // reuse the existing connection only if it targets the same address;
     // discovery/refresh can change the address and must reconnect.
-    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); } return; }
+    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestFriends(); } return; }
     if (browserSess) { browserSess.leave(); browserSess = null; }
     savePrefs();
     setDot('warn');
@@ -384,7 +419,7 @@ var Lobby = (function () {
       lobby: function (rooms, m) {
         setDot('on');
         if (m && m.maintenance) el('lb-maint').classList.remove('hidden'); else el('lb-maint').classList.add('hidden');
-        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); }
+        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestFriends(); }
         if (pendingVerify) { browserSess.sendVerifyEmail(pendingVerify); pendingVerify = null; }
         browserSess.requestLeaderboard();
         onRooms(rooms);
@@ -395,6 +430,7 @@ var Lobby = (function () {
       leaderboard: function (rows) { onLeaderboard(rows); },
       progression: function (p) { onProgression(p); },
       stats: function (series) { onStats(series); },
+      friends: function (mm) { onFriends(mm); },
       fail: function (reason) { setDot('off'); onFail(reason); browserSess = null; },
       status: function (s) { if (s === 'offline') setDot('off'); },
     });

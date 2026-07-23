@@ -161,6 +161,7 @@ function NetSession(_unused, url, cb) {
       case 'leaderboard': cb.leaderboard && cb.leaderboard(m.rows || []); return;
       case 'progression': cb.progression && cb.progression(m.progression || null); return;
       case 'stats': cb.stats && cb.stats(m.series || null); return;
+      case 'friends': cb.friends && cb.friends(m); return;
       case 'resolved': { var rf = pendingResolve; pendingResolve = null; if (rf) rf(m); return; }
       case 'redirect':               // the room lives on another instance now — reconnect there
         if (m.url) { url = m.url; redirecting = true; try { ws.close(); } catch (e) {} }
@@ -265,6 +266,11 @@ function NetSession(_unused, url, cb) {
   self.requestLeaderboard = function () { send({ t: 'leaderboard' }); };
   self.requestProgression = function () { send({ t: 'progression' }); };
   self.requestStats = function () { send({ t: 'stats' }); };
+  self.requestFriends = function () { send({ t: 'friends' }); };
+  self.friendReq = function (username) { send({ t: 'friendReq', username: username }); };
+  self.friendResp = function (id, accept) { send({ t: 'friendResp', id: id, accept: accept }); };
+  self.friendRemove = function (id) { send({ t: 'friendRemove', id: id }); };
+  self.friendBlock = function (id, blocked) { send({ t: 'friendBlock', id: id, blocked: blocked }); };
   // resolve a code → { url, connectToken, self } via the lobby socket, with a
   // timeout fallback so a slow/absent directory never blocks joining.
   self.resolve = function (code, cbk) {

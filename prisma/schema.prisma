@@ -34,8 +34,32 @@ model Account {
   memberships  WorldMember[]
   progression  Progression?
   stats        Stat[]
+  friendsFrom  Friendship[] @relation("FriendFrom")
+  friendsTo    Friendship[] @relation("FriendTo")
 
   @@index([lastSeenAt])
+}
+
+// ---- Social graph: directed friend/request/block edges ---------------------
+// A PENDING row (accountId → otherId) is a request; an ACCEPTED friendship is
+// stored as a row in BOTH directions; a BLOCKED row is one-directional.
+model Friendship {
+  id        String       @id @default(cuid())
+  accountId String
+  account   Account      @relation("FriendFrom", fields: [accountId], references: [id], onDelete: Cascade)
+  otherId   String
+  other     Account      @relation("FriendTo", fields: [otherId], references: [id], onDelete: Cascade)
+  status    FriendStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+
+  @@unique([accountId, otherId])
+  @@index([otherId, status])
+}
+
+enum FriendStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
 }
 
 // ---- Worlds: an authoritative saved game (one room) ------------------------
