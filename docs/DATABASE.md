@@ -36,13 +36,21 @@ Defined in `prisma/schema.prisma`:
   member per save; the file backend carries the set forward in each save's
   `meta.members` (a single save file per world), so a resume/restart never drops
   prior members.
-- **Progression** — cross-world account level/xp/unlocked tech. *Modelled; not
-  yet written* (needs an XP model — future increment).
+- **Progression** — cross-world account level / xp / unlocked tech. Derived
+  from the account's worlds by the pure `shared/progression.js`: per-world
+  XP = `money + entities*5 + techCount*250`, summed across every world the
+  account owns or has played; a triangular level curve (level *L* needs
+  `1000·L·(L-1)/2` XP); `unlockedTech` is the sorted union of researched tech
+  ids. Recomputed on demand (a `progression` lobby message) so it is always
+  fresh — never a second source of truth. The Postgres backend also upserts
+  the derived `Progression` row (keeping the modelled table live); the file
+  backend recomputes from save metadata, exactly like the leaderboard.
 - **Stat** — time-series counters (production totals, playtime). *Modelled; not
   yet written* (needs an aggregation cadence — future increment).
 
-The authoritative truth always lives in `World.snapshot`; `Factory` is a derived
-projection for cheap queries (guidelines DB-6) — never a second source of truth.
+The authoritative truth always lives in `World.snapshot`; `Factory` and
+`Progression` are derived projections for cheap queries (guidelines DB-6) —
+never a second source of truth.
 
 ## Leaderboard
 
@@ -129,7 +137,7 @@ uses the Prisma models.
 Implemented and tested on both backends (`npx prisma validate` passes; headless
 + browser tests pass): accounts, **account recovery** (email verify / password
 reset), account-owned world persistence, **versioned sessions**, restart
-continuity, the **Factory leaderboard projection**, and persistent
-**WorldMember** membership (merged My Worlds + member revive access). Next
-milestones: **Progression** (cross-world XP/levels) and **Stat** time-series —
-both modelled in the schema, not yet written.
+continuity, the **Factory leaderboard projection**, persistent **WorldMember**
+membership (merged My Worlds + member revive access), and cross-world
+**Progression** (level / xp / unlocked tech). Next milestone: **Stat**
+time-series — modelled in the schema, not yet written.

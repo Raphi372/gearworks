@@ -11,6 +11,8 @@
    the authoritative game loop never blocks on the database. Account/world/
    progression/stats live in relational tables for the persistent metagame.
    ========================================================================== */
+const Progression = require('../../shared/progression.js');
+
 function createPostgresStore(config) {
   const { DATABASE_URL, log } = config;
   if (!DATABASE_URL) throw new Error('STORAGE=postgres requires DATABASE_URL');
@@ -45,10 +47,11 @@ function createPostgresStore(config) {
         // derived leaderboard projection (one row per world)
         const p = w && data.meta.projection;
         if (p) {
+          const techIds = Array.isArray(p.techIds) ? p.techIds : [];
           await prisma.factory.upsert({
             where: { worldId: w.id },
-            create: { worldId: w.id, entityCount: p.entities | 0, money: p.money | 0, techTier: p.tech | 0 },
-            update: { entityCount: p.entities | 0, money: p.money | 0, techTier: p.tech | 0 },
+            create: { worldId: w.id, entityCount: p.entities | 0, money: p.money | 0, techTier: p.tech | 0, techIds },
+            update: { entityCount: p.entities | 0, money: p.money | 0, techTier: p.tech | 0, techIds },
           }).catch((e) => log.error(`pg factory save failed for ${code}: ${e.message}`));
         }
         // persistent membership (upsert per member; existing rows are never
@@ -108,6 +111,29 @@ function createPostgresStore(config) {
       if (!w) return null;
       const m = await prisma.worldMember.findUnique({ where: { accountId_worldId: { accountId, worldId: w.id } } }).catch(() => null);
       return m ? { role: String(m.role).toLowerCase() } : null;
+    },
+    // cross-world progression: aggregate the account's worlds' Factory
+    // projections into level/xp/unlockedTech, persist the derived Progression
+    // row (the modelled table stays live for future queries), and return it.
+    async progression(accountId) {
+      const [owned, memberships] = await Promise.all([
+        prisma.world.findMany({ where: { ownerId: accountId }, include: { factories: true } }).catch(() => []),
+        prisma.worldMember.findMany({ where: { accountId }, include: { world: { include: { factories: true } } } }).catch(() => []),
+      ]);
+      const byId = new Map();
+      owned.forEach((w) => byId.set(w.id, w));
+      memberships.forEach((m) => { if (m.world) byId.set(m.world.id, m.world); });
+      const worlds = Array.from(byId.values()).map((w) => {
+        const f = w.factories && w.factories[0];
+        return { projection: f ? { money: f.money, entities: f.entityCount, tech: f.techTier, techIds: f.techIds || [] } : {} };
+      });
+      const summary = Progression.summarize(worlds);
+      await prisma.progression.upsert({
+        where: { accountId },
+        create: { accountId, level: summary.level, xp: summary.xp, unlockedTech: summary.unlockedTech },
+        update: { level: summary.level, xp: summary.xp, unlockedTech: summary.unlockedTech },
+      }).catch((e) => log.error(`pg progression save failed for ${accountId}: ${e.message}`));
+      return summary;
     },
     async topFactories(limit) {
       const rows = await prisma.factory.findMany({

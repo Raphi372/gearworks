@@ -9,6 +9,7 @@
    ========================================================================== */
 const fs = require('fs');
 const path = require('path');
+const Progression = require('../../shared/progression.js');
 
 function createFileStore(config) {
   const { SAVE_DIR, BACKUPS, log } = config;
@@ -125,6 +126,23 @@ function createFileStore(config) {
     return mem ? { role: mem.role || 'player' } : null;
   }
 
+  // every world an account owns or has played, with its derived projection —
+  // the raw material for the cross-world progression aggregate
+  function accountWorlds(aid) {
+    const out = [];
+    for (const code of listRoomCodes()) {
+      const d = loadRoom(code);
+      if (!d || !d.meta) continue;
+      const owns = d.meta.ownerId === aid;
+      const member = Array.isArray(d.meta.members) && d.meta.members.some((x) => x.aid === aid);
+      if (owns || member) out.push({ code, projection: d.meta.projection || {} });
+    }
+    return out;
+  }
+  // cross-world level / xp / unlocked tech — derived on demand (like the
+  // leaderboard), always fresh, never a separate source of truth
+  function progression(aid) { return Progression.summarize(accountWorlds(aid)); }
+
   return {
     kind: 'file',
     accountsEnabled: true,
@@ -136,6 +154,7 @@ function createFileStore(config) {
     worldsByOwner: (ownerId) => Promise.resolve(worldsByOwner(ownerId)),
     worldsByMember: (aid) => Promise.resolve(worldsByMember(aid)),
     membership: (aid, code) => Promise.resolve(membership(aid, code)),
+    progression: (aid) => Promise.resolve(progression(aid)),
     topFactories: (limit) => Promise.resolve(topFactories(limit || 20)),
     recentRooms: (sinceMs) => Promise.resolve(recentRooms(sinceMs)),
     flush: () => Promise.resolve(),

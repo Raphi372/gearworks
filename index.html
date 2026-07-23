@@ -175,6 +175,13 @@ label.row { display:flex; justify-content:space-between; align-items:center; fon
 .world-row .wbadge { display:inline-block; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; padding:1px 5px; border-radius:4px; margin-left:6px; vertical-align:middle; }
 .world-row .wbadge.own { background:#1f3a2a; color:#7fe0a8; }
 .world-row .wbadge.mem { background:#23303f; color:#8ab6d6; }
+.lvl-row { display:flex; align-items:center; gap:8px; margin:8px 0 2px; }
+.lvl-badge { flex:none; width:34px; height:34px; border-radius:8px; background:linear-gradient(135deg,#2a6bd4,#4aa3ff); color:#fff; font-weight:800; font-size:15px; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 4px rgba(74,163,255,.4); }
+.lvl-meta { flex:1; min-width:0; }
+.lvl-meta .lvl-top { display:flex; justify-content:space-between; font-size:11px; color:#8aa; }
+.lvl-bar { height:7px; border-radius:4px; background:#1a2530; overflow:hidden; margin-top:3px; }
+.lvl-bar > span { display:block; height:100%; background:linear-gradient(90deg,#4aa3ff,#7CFC9E); }
+.lvl-tech { font-size:10px; color:#667; margin-top:3px; }
 </style>
 </head>
 <body>
@@ -202,6 +209,8 @@ label.row { display:flex; justify-content:space-between; align-items:center; fon
 
   <!-- account: signed-in state or sign-in forms (rendered by JS) -->
   <div id="lb-account"></div>
+  <!-- cross-world progression (signed-in players only; rendered by JS) -->
+  <div id="lb-progress"></div>
 
   <div class="formrow"><label>Your name</label><input class="txt" id="lb-name" maxlength="20" placeholder="Engineer" style="flex:1"></div>
   <div class="formrow"><label>Color</label><div class="swatches" id="lb-colors"></div></div>
@@ -290,6 +299,7 @@ label.row { display:flex; justify-content:space-between; align-items:center; fon
 
 <script src="client/config.js"></script>
 <script src="shared/core.js"></script>
+<script src="shared/progression.js"></script>
 <script src="client/net.js"></script>
 <script src="client/game.js"></script>
 </body>
