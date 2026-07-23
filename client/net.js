@@ -161,6 +161,7 @@ function NetSession(_unused, url, cb) {
       case 'leaderboard': cb.leaderboard && cb.leaderboard(m.rows || []); return;
       case 'progression': cb.progression && cb.progression(m.progression || null); return;
       case 'stats': cb.stats && cb.stats(m.series || null); return;
+      case 'achievements': cb.achievements && cb.achievements(m.achievements || null); return;
       case 'friends': cb.friends && cb.friends(m); return;
       case 'invites': cb.invites && cb.invites(m.invites || []); return;
       case 'invited': cb.invited && cb.invited(m); return;
@@ -270,6 +271,7 @@ function NetSession(_unused, url, cb) {
   self.requestLeaderboard = function () { send({ t: 'leaderboard' }); };
   self.requestProgression = function () { send({ t: 'progression' }); };
   self.requestStats = function () { send({ t: 'stats' }); };
+  self.requestAchievements = function () { send({ t: 'achievements' }); };
   self.requestFriends = function () { send({ t: 'friends' }); };
   self.friendReq = function (username) { send({ t: 'friendReq', username: username }); };
   self.friendResp = function (id, accept) { send({ t: 'friendResp', id: id, accept: accept }); };

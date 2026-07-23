@@ -68,7 +68,10 @@ Defined in `prisma/schema.prisma`:
 
 The authoritative truth always lives in `World.snapshot`; `Factory` and
 `Progression` are derived projections for cheap queries (guidelines DB-6) —
-never a second source of truth.
+never a second source of truth. **Achievements** are likewise derived — a pure
+function of the progression summary (`shared/achievements.js`), computed on
+demand, so there is no separate write path; a durable "unlocked-at" record is a
+later additive increment.
 
 ## Leaderboard
 

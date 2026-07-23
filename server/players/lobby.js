@@ -14,6 +14,7 @@
    ========================================================================== */
 const Core = require('../../shared/core.js');
 const Progression = require('../../shared/progression.js');
+const Achievements = require('../../shared/achievements.js');
 
 function createLobby(config, registry, auth, store, tokens, metrics, directory, presence, invites) {
   return function handleConn(conn) {
@@ -154,6 +155,11 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
             if (p) { await store.recordStats(account.id, Progression.metrics(p)).catch(() => {}); series = await store.statsFor(account.id).catch(() => series); }
           }
           return conn.send({ t: 'stats', series: series || {} });
+        }
+        case 'achievements': {   // derived from cross-world progression (DB-6)
+          if (!account || !store.progression) return conn.send({ t: 'achievements', achievements: null });
+          const p = await store.progression(account.id).catch(() => null);
+          return conn.send({ t: 'achievements', achievements: Achievements.evaluate(p) });
         }
         /* ------------------------------ social ------------------------------ */
         case 'friends':
