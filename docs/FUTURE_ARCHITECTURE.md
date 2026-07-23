@@ -574,8 +574,14 @@ achievements, leaderboards, presence, and quickplay matchmaking.
 >   button drives it. Proven by a matchmaking test (match / full → create /
 >   private skipped / prefer-fuller) and browser-verified end to end.
 >
-> **Remaining slices:** profiles + cosmetics locker; achievements; friend-scoped
-> leaderboards.
+> - **Slice 5 (achievements):** `shared/achievements.js` — a goal catalog +
+>   evaluator that is a **pure function of the progression summary** (level / net
+>   worth / buildings / tech), derived on demand like progression ([DB-6]), no
+>   write path. A lobby `achievements` message + a lobby panel with unlock state
+>   and progress bars. Proven by an evaluator test + an end-to-end check that the
+>   server's achievements equal `evaluate(progression)`.
+>
+> **Remaining slices:** profiles + cosmetics locker; friend-scoped leaderboards.
 
 **Files affected**
 - `server/social/*`, `server/matchmaking/*`, `server/presence/*` (new control-plane

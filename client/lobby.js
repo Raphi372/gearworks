@@ -280,7 +280,7 @@ var Lobby = (function () {
     authToken = m.token;
     try { localStorage.setItem('gearworks_token', authToken); } catch (e) {}
     renderAccount();
-    if (browserSess) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestFriends(); browserSess.requestInvites(); }
+    if (browserSess) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); }
   }
 
   function onAccount(m) {
@@ -300,6 +300,24 @@ var Lobby = (function () {
     el('lb-stats').innerHTML = '';
     el('lb-friends').innerHTML = '';
     el('lb-invites').innerHTML = '';
+    el('lb-achievements').innerHTML = '';
+  }
+
+  function onAchievements(a) {
+    var host = el('lb-achievements');
+    if (!host) return;
+    if (!account || !a || !a.list) { host.innerHTML = ''; return; }
+    var h = '<div class="divider"></div><b style="font-size:13px">Achievements</b> ' +
+      '<span style="color:#8aa;font-size:11px">' + a.unlocked + '/' + a.total + '</span>';
+    a.list.forEach(function (x) {
+      var pct = Math.round((x.progress || 0) * 100);
+      h += '<div class="ach' + (x.unlocked ? ' done' : '') + '"><div class="ach-ic">' + (x.unlocked ? '✓' : '🔒') + '</div>' +
+        '<div class="ach-b"><div class="ach-n">' + esc(x.name) + '</div>' +
+        '<div class="ach-d">' + esc(x.desc) + '</div>' +
+        (x.unlocked ? '' : '<div class="ach-bar"><span style="width:' + pct + '%"></span></div>') +
+        '</div></div>';
+    });
+    host.innerHTML = h;
   }
 
   function onInvites(list) {
@@ -447,7 +465,7 @@ var Lobby = (function () {
   function reconnectBrowser() {
     // reuse the existing connection only if it targets the same address;
     // discovery/refresh can change the address and must reconnect.
-    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestFriends(); browserSess.requestInvites(); } return; }
+    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); } return; }
     if (browserSess) { browserSess.leave(); browserSess = null; }
     savePrefs();
     setDot('warn');
@@ -458,7 +476,7 @@ var Lobby = (function () {
       lobby: function (rooms, m) {
         setDot('on');
         if (m && m.maintenance) el('lb-maint').classList.remove('hidden'); else el('lb-maint').classList.add('hidden');
-        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestFriends(); browserSess.requestInvites(); }
+        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); }
         if (pendingVerify) { browserSess.sendVerifyEmail(pendingVerify); pendingVerify = null; }
         browserSess.requestLeaderboard();
         onRooms(rooms);
@@ -469,6 +487,7 @@ var Lobby = (function () {
       leaderboard: function (rows) { onLeaderboard(rows); },
       progression: function (p) { onProgression(p); },
       stats: function (series) { onStats(series); },
+      achievements: function (a) { onAchievements(a); },
       friends: function (mm) { onFriends(mm); },
       invites: function (list) { onInvites(list); },
       invited: function (mm) { if (mm && mm.error) err(mm.error); else if (browserSess) browserSess.requestInvites(); },

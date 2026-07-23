@@ -179,6 +179,15 @@ label.row { display:flex; justify-content:space-between; align-items:center; fon
 .pres.on { background:#7CFC9E; }
 .pres.ig { background:#4aa3ff; }
 .pres.off { background:#556; }
+.ach { display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid rgba(255,255,255,.05); }
+.ach .ach-ic { flex:none; width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; background:#1a2530; color:#667; }
+.ach.done .ach-ic { background:#1f3a2a; color:#7fe0a8; }
+.ach .ach-b { flex:1; min-width:0; }
+.ach .ach-n { font-size:12px; font-weight:600; }
+.ach.done .ach-n { color:#e6eef6; }
+.ach .ach-d { font-size:10px; color:#8aa; }
+.ach .ach-bar { height:4px; border-radius:3px; background:#1a2530; overflow:hidden; margin-top:3px; }
+.ach .ach-bar > span { display:block; height:100%; background:#4aa3ff; }
 .lvl-row { display:flex; align-items:center; gap:8px; margin:8px 0 2px; }
 .lvl-badge { flex:none; width:34px; height:34px; border-radius:8px; background:linear-gradient(135deg,#2a6bd4,#4aa3ff); color:#fff; font-weight:800; font-size:15px; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 4px rgba(74,163,255,.4); }
 .lvl-meta { flex:1; min-width:0; }
@@ -223,6 +232,8 @@ label.row { display:flex; justify-content:space-between; align-items:center; fon
   <div id="lb-progress"></div>
   <!-- time-series stats sparklines (signed-in players only; rendered by JS) -->
   <div id="lb-stats"></div>
+  <!-- achievements (signed-in players only; rendered by JS) -->
+  <div id="lb-achievements"></div>
 
   <div class="formrow"><label>Your name</label><input class="txt" id="lb-name" maxlength="20" placeholder="Engineer" style="flex:1"></div>
   <div class="formrow"><label>Color</label><div class="swatches" id="lb-colors"></div></div>
@@ -318,6 +329,7 @@ label.row { display:flex; justify-content:space-between; align-items:center; fon
 <script src="client/config.js"></script>
 <script src="shared/core.js"></script>
 <script src="shared/progression.js"></script>
+<script src="shared/achievements.js"></script>
 <script src="client/net.js"></script>
 <!-- client split into same-origin modules (P1.3); load order is fixed:
      shared globals, then render → ui → input → game controller → chat → lobby → boot -->
