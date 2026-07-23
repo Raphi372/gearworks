@@ -47,7 +47,7 @@ function securityHeaders() {
   };
 }
 
-function createHttpServer(config, { getStats, onUpgrade }) {
+function createHttpServer(config, { getStats, onUpgrade, metrics }) {
   const { ROOT, log } = config;
   const startedAt = Date.now();
 
@@ -63,7 +63,17 @@ function createHttpServer(config, { getStats, onUpgrade }) {
       });
       return res.end(JSON.stringify(Object.assign(
         { ok: true, uptime: Math.round((Date.now() - startedAt) / 1000), proto: config.PROTO, version: config.VERSION },
-        getStats ? getStats() : {})));
+        getStats ? getStats() : {},
+        metrics ? { metrics: metrics.snapshot() } : {})));
+    }
+    if (p === '/metrics') {                     // Prometheus text exposition
+      if (!metrics) { res.writeHead(404); return res.end('metrics disabled'); }
+      if (metrics.token) {                      // optional bearer gate
+        const auth = req.headers['authorization'] || '';
+        if (auth !== `Bearer ${metrics.token}`) { res.writeHead(401, { 'WWW-Authenticate': 'Bearer' }); return res.end('unauthorized'); }
+      }
+      res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4', 'Cache-Control': 'no-store' });
+      return res.end(metrics.prometheus());
     }
     if (p === '/favicon.ico') { res.writeHead(204); return res.end(); }
 

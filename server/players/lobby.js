@@ -15,8 +15,9 @@
 const Core = require('../../shared/core.js');
 const Progression = require('../../shared/progression.js');
 
-function createLobby(config, registry, auth, store, tokens) {
+function createLobby(config, registry, auth, store, tokens, metrics) {
   return function handleConn(conn) {
+    if (metrics) metrics.recordConnection();
     let client = null;    // set once inside a room
     let room = null;
     let account = null;   // authenticated identity, or null (anonymous)

@@ -30,6 +30,7 @@ const { createTokens } = require('./players/tokens');
 const { createMonitoring } = require('./monitoring');
 const { createMailer } = require('./mailer');
 const { createStatSampler } = require('./stats');
+const { createMetrics } = require('./metrics');
 
 const log = config.log;
 const monitor = createMonitoring(config);
@@ -41,14 +42,20 @@ async function main() {
   try { await store.ready(); }
   catch (e) { log.error(`persistence backend not ready: ${e.message}`); process.exit(1); }
 
-  const registry = createRegistry(config, store, tokens);
+  let registry;   // referenced by the metrics gauges thunk (assigned just below)
+  const metrics = createMetrics(config, {
+    monitor,
+    gauges: () => (registry ? { rooms: registry.size(), connections: registry.connections() } : {}),
+  });
+  registry = createRegistry(config, store, tokens, metrics);
   const auth = createAuth(config, store, mailer, tokens);
   const stats = createStatSampler(config, registry, store);
-  const handleConn = createLobby(config, registry, auth, store, tokens);
+  const handleConn = createLobby(config, registry, auth, store, tokens, metrics);
 
   const server = createHttpServer(config, {
     getStats: () => ({ rooms: registry.size(), connections: registry.connections() }),
     onUpgrade: (socket) => handleConn(new WSConn(socket)),
+    metrics,
   });
 
   // resume a saved world from a file (file backend)
@@ -86,6 +93,7 @@ async function main() {
     closing = true;
     log(`${signal} — saving all rooms and shutting down`);
     stats.stop();
+    metrics.stop();
     registry.destroyAll('shutdown');     // each room writes a final save
     try { await store.flush(); await store.close(); } catch (e) { log.error(`store close: ${e.message}`); }
     server.close(() => process.exit(0));
@@ -93,8 +101,8 @@ async function main() {
   }
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('uncaughtException', (e) => { log.error(`uncaught: ${e.stack || e.message}`); monitor.report('uncaughtException', e); });
-  process.on('unhandledRejection', (e) => { log.error(`unhandled rejection: ${e && (e.stack || e.message)}`); monitor.report('unhandledRejection', e); });
+  process.on('uncaughtException', (e) => { metrics.recordError(); log.error(`uncaught: ${e.stack || e.message}`); monitor.report('uncaughtException', e); });
+  process.on('unhandledRejection', (e) => { metrics.recordError(); log.error(`unhandled rejection: ${e && (e.stack || e.message)}`); monitor.report('unhandledRejection', e); });
 }
 
 main();

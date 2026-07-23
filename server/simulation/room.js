@@ -25,6 +25,7 @@ class Room {
     this.tokens = deps.tokens;           // shared HMAC signer for reconnect tokens
     this.newPlayerId = deps.newPlayerId;
     this.onClose = deps.onClose;         // (code) => void, removes us from the registry
+    this.metrics = deps.metrics || null; // observability recorder (optional)
 
     this.code = opts.code;
     this.name = String(opts.name || 'Gearworks World').slice(0, 40);
@@ -86,6 +87,7 @@ class Room {
       g.Commands.apply(wire);
     }
     this.queue.length = 0;
+    if (this.metrics) { this.metrics.recordTick(); if (accepted.length) this.metrics.recordCommands(accepted.length); }
     // 3. advance simulation
     g.Sim.tick();
     // 4. broadcast the tick. Empty ticks are batched via heartbeats every
@@ -165,6 +167,7 @@ class Room {
   }
 
   sendSnapshot(c, why) {
+    if (this.metrics && (why === 'desync' || why === 'requested')) this.metrics.recordResync();
     const snap = this.game.Snapshot.capture();
     // gzip + base64: snapshots are the only large payloads in the protocol.
     // Clients without DecompressionStream negotiate raw JSON via hello.gz.
@@ -196,6 +199,7 @@ class Room {
 
   /* --------------------------- messages ------------------------------- */
   onMessage(c, m) {
+    if (this.metrics) this.metrics.recordMessage();
     switch (m.t) {
       case 'cmd': {
         if (typeof m.cmd !== 'object' || !m.cmd) return;
@@ -240,11 +244,15 @@ class Room {
         this.broadcast(msg);
         break;
       }
-      case 'ping': c.conn.sendLossy({ t: 'pong', ts: m.ts, tick: this.game.S.tick }); break;
+      case 'ping':
+        if (this.metrics && m.rtt != null) this.metrics.recordRtt(m.rtt);   // client-measured round trip
+        c.conn.sendLossy({ t: 'pong', ts: m.ts, tick: this.game.S.tick });
+        break;
       case 'hashReport': {
         // divergence audit: compare with the server hash for that tick
         if (this.serverHash && m.n === this.serverHash.tick && m.h !== this.serverHash.hash) {
           this.cfg.log.warn(`room ${this.code}: DIVERGENCE from ${c.name} @tick ${m.n} — resyncing`);
+          if (this.metrics) this.metrics.recordDivergence();
           this.sendSnapshot(c, 'desync');
         }
         break;
