@@ -10,7 +10,7 @@
 const crypto = require('crypto');
 const { Room } = require('../simulation/room');
 
-function createRegistry(config, store, tokens, metrics) {
+function createRegistry(config, store, tokens, metrics, directory) {
   const rooms = new Map();     // code -> Room
   let nextPlayerId = 1;
 
@@ -21,17 +21,23 @@ function createRegistry(config, store, tokens, metrics) {
     return c;
   }
 
+  function unregister(code) { rooms.delete(code); if (directory) directory.deregister(code); }
   const deps = {
     config, store, tokens, metrics,
     newPlayerId: () => nextPlayerId++,
-    onClose: (code) => rooms.delete(code),
+    onClose: unregister,     // room self-removes (idle-evict / destroy) → also drop its route
   };
+
+  function announce(room) {
+    if (directory) directory.register(room.code, { public: room.public, players: room.nonSpectators() });
+  }
 
   function create(opts) {
     if (rooms.size >= config.MAX_ROOMS) return null;
     const code = (opts.code && !rooms.has(opts.code)) ? opts.code : makeCode();
     const room = new Room(Object.assign({}, opts, { code }), deps);
     rooms.set(code, room);
+    announce(room);          // publish this instance's ownership of the room to the directory
     return room;
   }
 
@@ -56,6 +62,9 @@ function createRegistry(config, store, tokens, metrics) {
     size: () => rooms.size,
     connections: () => { let n = 0; for (const r of rooms.values()) n += r.clients.size; return n; },
     all: () => Array.from(rooms.values()),
+    // refresh every owned room's directory route (called on an interval by server.js)
+    // so live rooms stay "fresh" and crashed instances' routes go stale and evict.
+    heartbeatDirectory: () => { if (directory) for (const r of rooms.values()) announce(r); },
     destroyAll: (why) => { for (const r of Array.from(rooms.values())) r.destroy(why); },
   };
 }
