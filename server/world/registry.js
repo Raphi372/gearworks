@@ -31,7 +31,7 @@ function createRegistry(config, store, tokens, metrics, directory, presence) {
   };
 
   function announce(room) {
-    if (directory) directory.register(room.code, { name: room.name, public: room.public, players: room.nonSpectators() });
+    if (directory) directory.register(room.code, { name: room.name, public: room.public, players: room.nonSpectators(), maxPlayers: room.maxPlayers });
   }
 
   function create(opts) {
@@ -70,7 +70,7 @@ function createRegistry(config, store, tokens, metrics, directory, presence) {
       for (const rt of directory.list({ public: true })) {
         if (rt.self || seen.has(rt.code)) continue;
         seen.add(rt.code);
-        list.push({ code: rt.code, name: rt.name, players: rt.players, maxPlayers: 0,
+        list.push({ code: rt.code, name: rt.name, players: rt.players, maxPlayers: rt.maxPlayers | 0,
           tick: 0, region: rt.region, url: rt.url, here: false });
       }
     }

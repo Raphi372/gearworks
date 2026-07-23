@@ -95,6 +95,10 @@ var Lobby = (function () {
       if (code.length !== 6) { err('Enter a 6-character invite code'); return; }
       go({ kind: 'join', code: code, spectate: el('lb-spectate').checked });
     };
+    el('lb-quickplay').onclick = function () {
+      if (browserSess) { err('Finding a game…'); browserSess.quickplay(); }
+      else { applyDiscovery(reconnectBrowser); }
+    };
     el('lb-rooms').addEventListener('click', function (e) {
       var b = e.target.closest('[data-roomcode]');
       if (b) go({ kind: 'join', code: b.dataset.roomcode, spectate: el('lb-spectate').checked });
@@ -469,6 +473,11 @@ var Lobby = (function () {
       invites: function (list) { onInvites(list); },
       invited: function (mm) { if (mm && mm.error) err(mm.error); else if (browserSess) browserSess.requestInvites(); },
       inviteAccepted: function (mm) { if (mm && mm.code) go({ kind: 'join', code: mm.code }); },
+      quickplay: function (mm) {
+        if (mm && mm.code) go({ kind: 'join', code: mm.code });
+        else if (mm && mm.create) go({ kind: 'create', roomName: 'Quick Play World', public: true, maxPlayers: 8 });
+        else err((mm && mm.error) || 'no game available');
+      },
       fail: function (reason) { setDot('off'); onFail(reason); browserSess = null; },
       status: function (s) { if (s === 'offline') setDot('off'); },
     });
