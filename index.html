@@ -309,6 +309,15 @@ label.row { display:flex; justify-content:space-between; align-items:center; fon
 <script src="shared/core.js"></script>
 <script src="shared/progression.js"></script>
 <script src="client/net.js"></script>
+<!-- client split into same-origin modules (P1.3); load order is fixed:
+     shared globals, then render → ui → input → game controller → chat → lobby → boot -->
+<script src="client/app.js"></script>
+<script src="client/render.js"></script>
+<script src="client/ui.js"></script>
+<script src="client/input.js"></script>
 <script src="client/game.js"></script>
+<script src="client/chat.js"></script>
+<script src="client/lobby.js"></script>
+<script src="client/boot.js"></script>
 </body>
 </html>

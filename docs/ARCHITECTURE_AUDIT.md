@@ -170,10 +170,10 @@ Ordered by long-term impact. None are emergencies; all are worth tracking.
 4. **No account recovery.** `Account.email` exists but there is no verification or
    password-reset flow. A forgotten password today = permanent lockout. Real users
    *will* hit this.
-5. **Client monolith.** `client/game.js` is 1,766 lines mixing render, input, UI,
-   save, lobby, and chat. The server was deliberately de-monolithed; the client
-   has the same latent maintainability debt (guidelines [A-2]). No build step is a
-   feature; multiple `<script>` files would keep that and split concerns.
+5. **Client monolith.** ~~`client/game.js` is 1,766 lines mixing render, input, UI,
+   save, lobby, and chat.~~ **Resolved (P1.3):** split into ordered same-origin
+   scripts (`app`/`render`/`ui`/`input`/`game`/`chat`/`lobby`/`boot`) that share
+   global scope — no build step, CSP intact, byte-identical behavior.
 6. **Test coverage is core-only.** `scripts/test.js` (5 tests) covers determinism,
    snapshot round-trip, command authority, file persistence, and chat sanitize —
    excellent for the sim, but **there is no automated test in CI for networking/WS,
@@ -284,9 +284,10 @@ features; P1 = important; P2 = later.**
 - **P1.2 Durable/shared sessions.** Move the reconnect-token store behind an
   interface with a shared backend (Postgres/Redis). Immediate win: reconnect
   survives restarts; also the prerequisite for scale ([P-6], debt #2).
-- **P1.3 Client modularization.** Split `client/game.js` into multiple
-  same-origin scripts (render / input / ui / lobby / chat) — no build step, CSP
-  intact ([A-2], debt #5).
+- **P1.3 Client modularization.** ✅ **Done.** `client/game.js` split into
+  ordered same-origin scripts (`app` / `render` / `ui` / `input` / `game` /
+  `chat` / `lobby` / `boot`) sharing global scope — no build step, CSP intact
+  ([A-2], debt #5).
 - **P1.4 Observability.** Emit counters (rooms, players, ticks/s, RTT p50/p95,
   divergence rate) and wire alerting; a divergence spike is a cheating/determinism
   signal ([Q-4]).
