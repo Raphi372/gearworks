@@ -19,14 +19,18 @@
    ========================================================================== */
 const { createFileStore } = require('./fileStore');
 const { createPostgresStore } = require('./postgresStore');
+const { createSnapshotStore } = require('./snapshotStore');
 
 function createStore(config) {
+  // where snapshot BLOBS live (inline by default). Injected into either backend
+  // so metadata and the (large) snapshot can be stored independently.
+  const snapshots = createSnapshotStore(config);
   if (config.STORAGE === 'postgres') {
     config.log('persistence: PostgreSQL backend');
-    return createPostgresStore(config);
+    return createPostgresStore(config, snapshots);
   }
   config.log(`persistence: file backend (${config.SAVE_DIR})`);
-  return createFileStore(config);
+  return createFileStore(config, snapshots);
 }
 
 module.exports = { createStore };

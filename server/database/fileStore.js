@@ -11,9 +11,10 @@ const fs = require('fs');
 const path = require('path');
 const Progression = require('../../shared/progression.js');
 
-function createFileStore(config) {
+function createFileStore(config, snapshots) {
   const { SAVE_DIR, BACKUPS, log } = config;
   const STAT_KEEP = config.STAT_KEEP || 168;
+  snapshots = snapshots || { external: false };   // snapshot blob store (inline by default)
   if (!fs.existsSync(SAVE_DIR)) fs.mkdirSync(SAVE_DIR, { recursive: true });
 
   function roomPath(code) { return path.join(SAVE_DIR, `${code}.json`); }
@@ -44,15 +45,30 @@ function createFileStore(config) {
         if (fs.existsSync(from) && i > 1) fs.renameSync(from, to);
         else if (i === 1 && fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak1`);
       }
-      fs.writeFileSync(file, JSON.stringify(data));
+      // externalize the (large) snapshot blob when a snapshot store is active,
+      // keeping only a small snapshotRef in the room save; else inline as before.
+      let toWrite = data;
+      if (snapshots.external) {
+        const ref = snapshots.put(code, data.snapshot);
+        toWrite = { meta: Object.assign({}, data.meta, { snapshotRef: ref }), snapshot: null };
+      }
+      fs.writeFileSync(file, JSON.stringify(toWrite));
       return true;
     } catch (e) { log.error(`file save failed for room ${code}: ${e.message}`); return false; }
   }
 
-  function loadRoom(code) {
+  // read a room save's METADATA (fast; the snapshot may be an external ref).
+  function loadMeta(code) {
     try { return JSON.parse(fs.readFileSync(roomPath(code), 'utf8')); }
     catch (e) { return null; }
   }
+  // fill in the snapshot blob from its external ref if the save only holds a ref.
+  function hydrate(d) {
+    if (d && d.meta && d.meta.snapshotRef && d.snapshot == null) d.snapshot = snapshots.get(d.meta.snapshotRef);
+    return d;
+  }
+  // the full room (metadata + snapshot) — used by resume / boot restore.
+  function loadRoom(code) { return hydrate(loadMeta(code)); }
 
   function loadFile(absPath) {
     try { return JSON.parse(fs.readFileSync(absPath, 'utf8')); }
@@ -85,7 +101,7 @@ function createFileStore(config) {
   function topFactories(limit) {
     const out = [];
     for (const code of listRoomCodes()) {
-      const d = loadRoom(code);
+      const d = loadMeta(code);
       if (!d || !d.meta) continue;
       const p = d.meta.projection || {};
       out.push({ code, name: d.meta.name, ownerId: d.meta.ownerId || null,
@@ -102,7 +118,7 @@ function createFileStore(config) {
   function worldsByOwner(ownerId) {
     const out = [];
     for (const code of listRoomCodes()) {
-      const d = loadRoom(code);
+      const d = loadMeta(code);
       if (d && d.meta && d.meta.ownerId === ownerId) {
         out.push({ code, name: d.meta.name, savedAt: d.meta.saved || 0 });
       }
@@ -114,7 +130,7 @@ function createFileStore(config) {
   function worldsByMember(aid) {
     const out = [];
     for (const code of listRoomCodes()) {
-      const d = loadRoom(code);
+      const d = loadMeta(code);
       const mem = d && d.meta && Array.isArray(d.meta.members) ? d.meta.members.find((x) => x.aid === aid) : null;
       if (mem) out.push({ code, name: d.meta.name, ownerId: d.meta.ownerId || null, role: mem.role || 'player', savedAt: d.meta.saved || 0 });
     }
@@ -122,7 +138,7 @@ function createFileStore(config) {
   }
   // an account's stored role in one world, or null if never a member
   function membership(aid, code) {
-    const d = loadRoom(code);
+    const d = loadMeta(code);
     const mem = d && d.meta && Array.isArray(d.meta.members) ? d.meta.members.find((x) => x.aid === aid) : null;
     return mem ? { role: mem.role || 'player' } : null;
   }
@@ -132,7 +148,7 @@ function createFileStore(config) {
   function accountWorlds(aid) {
     const out = [];
     for (const code of listRoomCodes()) {
-      const d = loadRoom(code);
+      const d = loadMeta(code);
       if (!d || !d.meta) continue;
       const owns = d.meta.ownerId === aid;
       const member = Array.isArray(d.meta.members) && d.meta.members.some((x) => x.aid === aid);

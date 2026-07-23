@@ -26,6 +26,8 @@ All via environment variables (12-factor). Defaults in parentheses.
 | `PUBLIC_URL` | — | this instance's reachable `ws(s)://` URL (published in the directory) |
 | `DIRECTORY_DIR` | `<SAVE_DIR>/directory` | route files when `DIRECTORY=file` |
 | `CONNECT_TTL_MIN` | `2` | connect-token lifetime (control-plane → instance handoff) |
+| `SNAPSHOT_STORE` | `inline` | where snapshot blobs live: `inline` or `fs` (shared/mounted dir) |
+| `SNAPSHOT_DIR` | `<SAVE_DIR>/snapshots` | snapshot blobs when `SNAPSHOT_STORE=fs` |
 | `MAX_ROOMS` | `32` | rooms per process |
 | `MAX_PLAYERS_PER_ROOM` | `16` | seats per room |
 | `MAX_MSG_BYTES` | `524288` | inbound frame cap (flood guard) |

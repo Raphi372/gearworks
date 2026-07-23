@@ -22,7 +22,12 @@ Defined in `prisma/schema.prisma`:
 - **Account** — player identity (guest, email, or OAuth). Optional; the game
   runs fully anonymous today.
 - **World** — a saved authoritative game. `snapshot` (JSONB) is the exact
-  `shared/core.js` snapshot — the same format the file backend stores.
+  `shared/core.js` snapshot — the same format the file backend stores. When a
+  snapshot store is active (`SNAPSHOT_STORE=fs`, object storage next), the blob
+  lives externally and `snapshot` is null while `snapshotRef` points at it, so
+  any instance can load any room on placement (`server/database/snapshotStore.js`);
+  `World.snapshot` stays the authoritative record ([DB-6]) — it just lives out of
+  the row. Default is inline (unchanged).
 - **Factory** — **live** per-world projection (entity count, money, tech tier),
   upserted on every save from the room's derived `projection()`. Powers the
   global leaderboard without deserializing snapshots. One row per world
