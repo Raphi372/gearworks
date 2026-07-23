@@ -469,6 +469,18 @@ single-process $0 deployment working with the new subsystem **disabled by defaul
 clients routed via signed connect tokens, and snapshots in object storage — while
 single-instance mode stays byte-for-byte the current behavior.
 
+> **Status — Slice 1 landed (the handoff gate).** `server/world/directory.js`
+> (room router; `local` no-op default + shared `file` backend), the `connect`
+> token purpose, registry register/deregister/heartbeat, lobby connect-token
+> acceptance, and a `GET /resolve` control endpoint are in, proven by
+> `test/directory.test.js` — including a **two-process** test where a peer
+> instance resolves the owner's room and mints a connect token the owner
+> verifies and seats. Single-instance behavior is unchanged. **Remaining
+> slices:** client `director.js` handshake; object-storage snapshot backend +
+> `World.snapshotRef`; Postgres directory backend + `RoomDirectory`/`Region`
+> schema; aggregated cross-instance public listing; compare-and-set placement to
+> prevent split-brain.
+
 **Files affected**
 - `server/directory/*` (new): directory interface + Postgres backend (+ optional
   Redis cache); place/resolve/heartbeat/aggregate-listing.

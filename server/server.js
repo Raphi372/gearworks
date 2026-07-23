@@ -31,6 +31,7 @@ const { createMonitoring } = require('./monitoring');
 const { createMailer } = require('./mailer');
 const { createStatSampler } = require('./stats');
 const { createMetrics } = require('./metrics');
+const { createDirectory } = require('./world/directory');
 
 const log = config.log;
 const monitor = createMonitoring(config);
@@ -47,15 +48,30 @@ async function main() {
     monitor,
     gauges: () => (registry ? { rooms: registry.size(), connections: registry.connections() } : {}),
   });
-  registry = createRegistry(config, store, tokens, metrics);
+  const directory = createDirectory(config);   // room router (local no-op | shared)
+  registry = createRegistry(config, store, tokens, metrics, directory);
   const auth = createAuth(config, store, mailer, tokens);
   const stats = createStatSampler(config, registry, store);
   const handleConn = createLobby(config, registry, auth, store, tokens, metrics);
 
+  // control channel: code → { owning instance URL, signed connect token }. The
+  // connect token binds the (optional) account to this room; the owning
+  // instance verifies it on join with no cross-service call ([SEC-5], [P-6]).
+  async function resolveRoom(rawCode, sessionToken) {
+    const code = String(rawCode || '').toUpperCase().trim();
+    if (!code) return { error: 'code required', status: 400 };
+    const route = directory.resolve(code);
+    if (!route) return { error: 'room not found', status: 404 };
+    const account = sessionToken ? await auth.fromToken(sessionToken).catch(() => null) : null;
+    const connectToken = tokens.sign('connect',
+      { aid: account ? account.id : null, room: code, region: route.region }, config.CONNECT_TTL_MS);
+    return { room: code, region: route.region, url: route.url, self: route.self, connectToken };
+  }
+
   const server = createHttpServer(config, {
     getStats: () => ({ rooms: registry.size(), connections: registry.connections() }),
     onUpgrade: (socket) => handleConn(new WSConn(socket)),
-    metrics,
+    metrics, resolveRoom,
   });
 
   // resume a saved world from a file (file backend)
@@ -86,6 +102,11 @@ async function main() {
     stats.start();     // begin periodic time-series sampling (no-op if disabled)
   });
 
+  // keep this instance's directory routes fresh so live rooms stay resolvable
+  // and a crashed instance's routes go stale (harmless no-op in 'local' mode).
+  const dirTimer = setInterval(() => registry.heartbeatDirectory(), config.DIRECTORY_HEARTBEAT_MS);
+  dirTimer.unref();
+
   // ---- graceful shutdown (Fly/Railway send SIGTERM; Ctrl-C sends SIGINT) ----
   let closing = false;
   async function shutdown(signal) {
@@ -94,7 +115,8 @@ async function main() {
     log(`${signal} — saving all rooms and shutting down`);
     stats.stop();
     metrics.stop();
-    registry.destroyAll('shutdown');     // each room writes a final save
+    clearInterval(dirTimer);
+    registry.destroyAll('shutdown');     // each room writes a final save (and deregisters its route via onClose)
     try { await store.flush(); await store.close(); } catch (e) { log.error(`store close: ${e.message}`); }
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();   // hard cap

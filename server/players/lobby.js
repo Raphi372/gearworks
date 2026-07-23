@@ -42,6 +42,16 @@ function createLobby(config, registry, auth, store, tokens, metrics) {
       const mr = r.memberRole(account.id);
       return (account.id === r.ownerId || mr === 'admin' || mr === 'host') ? 'admin' : 'player';
     }
+    // A connect token (docs/FUTURE_ARCHITECTURE.md §4.3) is the control plane's
+    // signed proof that this client was routed here for this room. It is OPTIONAL
+    // — the single-instance deploy never issues one, so its absence is fine — but
+    // if present it MUST be valid for the code, so a forged/mismatched token is
+    // rejected. Access/role checks still run on the instance regardless.
+    function connectOk(m, code) {
+      if (!m.connectToken) return true;
+      const d = tokens.verify('connect', String(m.connectToken));
+      return !!(d && d.room === code);
+    }
 
     async function enterRoom(fn) {
       if (room || entering) return;
@@ -142,7 +152,9 @@ function createLobby(config, registry, auth, store, tokens, metrics) {
           });
         case 'join':
           return enterRoom(async () => {
-            const r = registry.get(m.code);
+            const code = String(m.code || '').toUpperCase().trim();
+            if (!connectOk(m, code)) return conn.send({ t: 'err', reason: 'invalid connect token' });
+            const r = registry.get(code);
             if (!r) return conn.send({ t: 'err', reason: 'room not found' });
             const asSpec = !!m.spectate;
             if (!asSpec && r.nonSpectators() >= r.maxPlayers) return conn.send({ t: 'err', reason: 'room full' });
@@ -155,6 +167,7 @@ function createLobby(config, registry, auth, store, tokens, metrics) {
           return enterRoom(async () => {
             if (config.MAINTENANCE) return conn.send({ t: 'err', reason: 'server is in maintenance — try again shortly' });
             const code = String(m.code || '').toUpperCase().trim();
+            if (!connectOk(m, code)) return conn.send({ t: 'err', reason: 'invalid connect token' });
             const live = registry.get(code);
             if (live) {   // already live — join it with any restored role
               room = live;

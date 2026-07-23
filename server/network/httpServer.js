@@ -47,13 +47,31 @@ function securityHeaders() {
   };
 }
 
-function createHttpServer(config, { getStats, onUpgrade, metrics }) {
+function createHttpServer(config, { getStats, onUpgrade, metrics, resolveRoom }) {
   const { ROOT, log } = config;
   const startedAt = Date.now();
 
   const server = http.createServer((req, res) => {
     let p = decodeURIComponent((req.url || '/').split('?')[0]);
     if (p === '/') p = '/index.html';
+
+    // control channel: resolve an invite code to its owning instance + a signed
+    // connect token (docs/FUTURE_ARCHITECTURE.md §4.3). Any instance can answer
+    // because the directory is shared; the client then opens the game WS to the
+    // returned URL with the connect token.
+    if (p === '/resolve' && resolveRoom) {
+      const q = new URL(req.url, 'http://localhost').searchParams;
+      const bearer = (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '');
+      Promise.resolve(resolveRoom(q.get('code') || '', q.get('token') || bearer || ''))
+        .then((out) => {
+          const code = out && out.error ? (out.status || 404) : 200;
+          res.writeHead(code, { 'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': config.ALLOW_ORIGIN, 'Cache-Control': 'no-store' });
+          res.end(JSON.stringify(out || { error: 'not found' }));
+        })
+        .catch((e) => { log.error(`resolve failed: ${e.message}`); res.writeHead(500); res.end('{"error":"resolve failed"}'); });
+      return;
+    }
 
     if (p === '/health' || p === '/healthz') {
       res.writeHead(200, {

@@ -20,6 +20,12 @@ All via environment variables (12-factor). Defaults in parentheses.
 | `RESTORE_WINDOW_MIN` | `30` | how recent a saved world must be to be restored |
 | `STAT_SAMPLE_MIN` | `60` | minutes between time-series stat samples (`0` disables) |
 | `STAT_KEEP` | `168` | newest points kept per account-metric |
+| `DIRECTORY` | `local` | room router: `local` (single instance) or `file` (shared, multi-instance) |
+| `INSTANCE_ID` | `<host>-<pid>` | this instance's id in the directory |
+| `REGION` | `local` | region label for routing/listing |
+| `PUBLIC_URL` | — | this instance's reachable `ws(s)://` URL (published in the directory) |
+| `DIRECTORY_DIR` | `<SAVE_DIR>/directory` | route files when `DIRECTORY=file` |
+| `CONNECT_TTL_MIN` | `2` | connect-token lifetime (control-plane → instance handoff) |
 | `MAX_ROOMS` | `32` | rooms per process |
 | `MAX_PLAYERS_PER_ROOM` | `16` | seats per room |
 | `MAX_MSG_BYTES` | `524288` | inbound frame cap (flood guard) |

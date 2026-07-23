@@ -65,6 +65,17 @@ const config = {
   METRICS_TOKEN: process.env.METRICS_TOKEN || '',
   DIVERGENCE_ALERT_PER_MIN: envInt('DIVERGENCE_ALERT_PER_MIN', 0),   // 0 disables
 
+  // horizontal-scale scaffolding (docs/FUTURE_ARCHITECTURE.md, Phase 1). All
+  // additive: DIRECTORY=local is the single-instance no-op used by the $0 deploy.
+  INSTANCE_ID: process.env.INSTANCE_ID || `${require('os').hostname()}-${process.pid}`,
+  REGION: process.env.REGION || 'local',
+  PUBLIC_URL: process.env.PUBLIC_URL || '',           // this instance's reachable ws(s):// URL
+  DIRECTORY: process.env.DIRECTORY || 'local',        // 'local' | 'file' (shared room router)
+  DIRECTORY_DIR: process.env.DIRECTORY_DIR || '',     // defaults to <SAVE_DIR>/directory (see directory.js)
+  DIRECTORY_STALE_MS: envInt('DIRECTORY_STALE_MS', 120000),   // a route unrefreshed this long is dead
+  DIRECTORY_HEARTBEAT_MS: envInt('DIRECTORY_HEARTBEAT_MS', 30000),
+  CONNECT_TTL_MS: envInt('CONNECT_TTL_MIN', 2) * 60 * 1000,   // connect-token lifetime
+
   // simulation / networking
   TICK_MS: 1000 / Core.Config.SIM_HZ,
   MAX_ROOMS: envInt('MAX_ROOMS', 32),
