@@ -55,6 +55,11 @@ const config = {
   // crash doesn't end live games (RESTORE_ON_BOOT=0 disables).
   RESTORE_ON_BOOT: process.env.RESTORE_ON_BOOT !== '0',
   RESTORE_WINDOW_MIN: envInt('RESTORE_WINDOW_MIN', 30),
+  // time-series stats: sample each active account's aggregate every N minutes
+  // (STAT_SAMPLE_MIN=0 disables the sampler), keeping the last STAT_KEEP points
+  // per metric so storage stays bounded.
+  STAT_SAMPLE_MIN: envInt('STAT_SAMPLE_MIN', 60),
+  STAT_KEEP: envInt('STAT_KEEP', 168),                 // e.g. a week of hourly points
 
   // simulation / networking
   TICK_MS: 1000 / Core.Config.SIM_HZ,

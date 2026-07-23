@@ -18,6 +18,8 @@ All via environment variables (12-factor). Defaults in parentheses.
 | `BACKUPS` | `5` | rotating file backups kept |
 | `RESTORE_ON_BOOT` | `1` | re-create recently-active worlds as live rooms on start (`0` disables) |
 | `RESTORE_WINDOW_MIN` | `30` | how recent a saved world must be to be restored |
+| `STAT_SAMPLE_MIN` | `60` | minutes between time-series stat samples (`0` disables) |
+| `STAT_KEEP` | `168` | newest points kept per account-metric |
 | `MAX_ROOMS` | `32` | rooms per process |
 | `MAX_PLAYERS_PER_ROOM` | `16` | seats per room |
 | `MAX_MSG_BYTES` | `524288` | inbound frame cap (flood guard) |

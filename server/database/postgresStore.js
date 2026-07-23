@@ -16,6 +16,7 @@ const Progression = require('../../shared/progression.js');
 function createPostgresStore(config) {
   const { DATABASE_URL, log } = config;
   if (!DATABASE_URL) throw new Error('STORAGE=postgres requires DATABASE_URL');
+  const STAT_KEEP = config.STAT_KEEP || 168;
 
   let PrismaClient;
   try { ({ PrismaClient } = require('@prisma/client')); }
@@ -134,6 +135,27 @@ function createPostgresStore(config) {
         update: { level: summary.level, xp: summary.xp, unlockedTech: summary.unlockedTech },
       }).catch((e) => log.error(`pg progression save failed for ${accountId}: ${e.message}`));
       return summary;
+    },
+    // append one time-series point per metric, then prune each metric to the
+    // newest STAT_KEEP rows so the table stays bounded.
+    async recordStats(accountId, samples, at) {
+      if (!accountId || !samples) return;
+      const recordedAt = at ? new Date(at) : new Date();
+      for (const key of Object.keys(samples)) {
+        const value = BigInt(Math.trunc(Number(samples[key]) || 0));
+        await prisma.stat.create({ data: { accountId, key, value, recordedAt } })
+          .catch((e) => log.error(`pg stat save failed for ${accountId}/${key}: ${e.message}`));
+        const stale = await prisma.stat.findMany({
+          where: { accountId, key }, orderBy: { recordedAt: 'desc' }, skip: STAT_KEEP, select: { id: true },
+        }).catch(() => []);
+        if (stale.length) await prisma.stat.deleteMany({ where: { id: { in: stale.map((r) => r.id) } } }).catch(() => {});
+      }
+    },
+    async statsFor(accountId) {
+      const rows = await prisma.stat.findMany({ where: { accountId }, orderBy: { recordedAt: 'asc' } }).catch(() => []);
+      const out = {};
+      rows.forEach((r) => { (out[r.key] || (out[r.key] = [])).push({ t: +r.recordedAt, v: Number(r.value) }); });
+      return out;
     },
     async topFactories(limit) {
       const rows = await prisma.factory.findMany({

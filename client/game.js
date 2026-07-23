@@ -1789,7 +1789,7 @@ var Lobby = (function () {
     authToken = m.token;
     try { localStorage.setItem('gearworks_token', authToken); } catch (e) {}
     renderAccount();
-    if (browserSess) { browserSess.requestMyWorlds(); browserSess.requestProgression(); }
+    if (browserSess) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); }
   }
 
   function onAccount(m) {
@@ -1806,6 +1806,46 @@ var Lobby = (function () {
     renderAccount();
     el('lb-myworlds').innerHTML = '';
     el('lb-progress').innerHTML = '';
+    el('lb-stats').innerHTML = '';
+  }
+
+  // an inline-SVG sparkline (CSP-safe: no external libs, no inline handlers)
+  function sparkline(points) {
+    var n = points.length;
+    if (n < 2) return '';
+    var W = 100, H = 24, pad = 2;
+    var min = Infinity, max = -Infinity;
+    points.forEach(function (v) { if (v < min) min = v; if (v > max) max = v; });
+    var range = max - min || 1;
+    var d = points.map(function (v, i) {
+      var x = pad + i / (n - 1) * (W - 2 * pad);
+      var y = H - pad - (v - min) / range * (H - 2 * pad);
+      return (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+    }).join(' ');
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+      '<path d="' + d + '" fill="none" stroke="#4aa3ff" stroke-width="1.5" ' +
+      'stroke-linejoin="round" stroke-linecap="round"/></svg>';
+  }
+
+  function onStats(series) {
+    var host = el('lb-stats');
+    if (!host) return;
+    if (!account || !series) { host.innerHTML = ''; return; }
+    // show the two most telling metrics as sparklines over time
+    var cards = [{ key: 'net_worth', label: 'Net worth', money: true }, { key: 'xp', label: 'XP', money: false }];
+    var any = false;
+    var h = '<div class="spark-grid">';
+    cards.forEach(function (c) {
+      var pts = (series[c.key] || []).map(function (p) { return p.v | 0; });
+      if (!pts.length) return;
+      any = true;
+      var last = pts[pts.length - 1];
+      h += '<div class="spark"><div class="sk-top"><span class="sk-label">' + esc(c.label) + '</span>' +
+        '<span class="sk-val">' + (c.money ? '$' + fmtMoney(last) : fmtMoney(last)) + '</span></div>' +
+        sparkline(pts) + '</div>';
+    });
+    h += '</div>';
+    host.innerHTML = any ? h : '';
   }
 
   function onProgression(p) {
@@ -1869,7 +1909,7 @@ var Lobby = (function () {
   function reconnectBrowser() {
     // reuse the existing connection only if it targets the same address;
     // discovery/refresh can change the address and must reconnect.
-    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) { browserSess.requestMyWorlds(); browserSess.requestProgression(); } return; }
+    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); } return; }
     if (browserSess) { browserSess.leave(); browserSess = null; }
     savePrefs();
     setDot('warn');
@@ -1880,7 +1920,7 @@ var Lobby = (function () {
       lobby: function (rooms, m) {
         setDot('on');
         if (m && m.maintenance) el('lb-maint').classList.remove('hidden'); else el('lb-maint').classList.add('hidden');
-        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); }
+        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); }
         if (pendingVerify) { browserSess.sendVerifyEmail(pendingVerify); pendingVerify = null; }
         browserSess.requestLeaderboard();
         onRooms(rooms);
@@ -1890,6 +1930,7 @@ var Lobby = (function () {
       myWorlds: function (worlds) { onMyWorlds(worlds); },
       leaderboard: function (rows) { onLeaderboard(rows); },
       progression: function (p) { onProgression(p); },
+      stats: function (series) { onStats(series); },
       fail: function (reason) { setDot('off'); onFail(reason); browserSess = null; },
       status: function (s) { if (s === 'offline') setDot('off'); },
     });
