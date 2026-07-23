@@ -52,7 +52,7 @@ async function main() {
   registry = createRegistry(config, store, tokens, metrics, directory);
   const auth = createAuth(config, store, mailer, tokens);
   const stats = createStatSampler(config, registry, store);
-  const handleConn = createLobby(config, registry, auth, store, tokens, metrics);
+  const handleConn = createLobby(config, registry, auth, store, tokens, metrics, directory);
 
   // control channel: code → { owning instance URL, signed connect token }. The
   // connect token binds the (optional) account to this room; the owning
