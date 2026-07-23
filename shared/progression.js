@@ -51,11 +51,13 @@
   // Aggregate an account's worlds (each with a `projection` and optional
   // `techIds`) into a progression summary suitable for storage or display.
   function summarize(worlds) {
-    var xp = 0;
+    var xp = 0, money = 0, entities = 0;
     var techSet = {};
     (worlds || []).forEach(function (w) {
       var p = w.projection || w;
       xp += worldXp(p);
+      money += Math.max(0, p.money | 0);
+      entities += Math.max(0, p.entities | 0);
       var ids = (p && p.techIds) || w.techIds;
       if (ids && ids.length) ids.forEach(function (t) { if (t) techSet[t] = 1; });
     });
@@ -64,11 +66,26 @@
     return {
       xp: xp,
       level: level,
+      money: money,                           // total net worth across worlds
+      entities: entities,                     // total buildings across worlds
       unlockedTech: unlockedTech,
       xpThisLevel: xpForLevel(level),         // XP at which this level began
       xpNextLevel: xpForLevel(level + 1),     // XP needed for the next level
     };
   }
 
-  return { worldXp: worldXp, xpForLevel: xpForLevel, levelForXp: levelForXp, summarize: summarize, STEP: STEP };
+  // the time-series metrics sampled from a progression summary (one number per
+  // key) — kept here so the sampler and the lobby seed agree on the mapping.
+  function metrics(summary) {
+    var s = summary || {};
+    return {
+      net_worth: s.money | 0,
+      entities: s.entities | 0,
+      tech: (s.unlockedTech || []).length,
+      xp: s.xp | 0,
+      level: s.level | 0,
+    };
+  }
+
+  return { worldXp: worldXp, xpForLevel: xpForLevel, levelForXp: levelForXp, summarize: summarize, metrics: metrics, STEP: STEP };
 });

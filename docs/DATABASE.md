@@ -45,8 +45,14 @@ Defined in `prisma/schema.prisma`:
   fresh — never a second source of truth. The Postgres backend also upserts
   the derived `Progression` row (keeping the modelled table live); the file
   backend recomputes from save metadata, exactly like the leaderboard.
-- **Stat** — time-series counters (production totals, playtime). *Modelled; not
-  yet written* (needs an aggregation cadence — future increment).
+- **Stat** — time-series counters, one row per `(account, key, recordedAt)`.
+  A periodic sampler (`server/stats.js`, every `STAT_SAMPLE_MIN` minutes;
+  `0` disables it) records one point per metric — `net_worth`, `entities`,
+  `tech`, `xp`, `level` — for every account active in a live room, taken from
+  the same progression aggregate. Each metric is trimmed to the newest
+  `STAT_KEEP` points (default 168, ~a week of hourly) so storage stays bounded;
+  the file backend keeps them in `stats.json`. A player's first `stats` request
+  seeds one point so a returning player sees their standing immediately.
 
 The authoritative truth always lives in `World.snapshot`; `Factory` and
 `Progression` are derived projections for cheap queries (guidelines DB-6) —
@@ -138,6 +144,7 @@ Implemented and tested on both backends (`npx prisma validate` passes; headless
 + browser tests pass): accounts, **account recovery** (email verify / password
 reset), account-owned world persistence, **versioned sessions**, restart
 continuity, the **Factory leaderboard projection**, persistent **WorldMember**
-membership (merged My Worlds + member revive access), and cross-world
-**Progression** (level / xp / unlocked tech). Next milestone: **Stat**
-time-series — modelled in the schema, not yet written.
+membership (merged My Worlds + member revive access), cross-world
+**Progression** (level / xp / unlocked tech), and **Stat** time-series (periodic
+sampling of each active account's metrics). The persistent metagame modelled in
+`schema.prisma` is now fully implemented on both backends.

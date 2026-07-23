@@ -13,6 +13,7 @@
    and ownership of the worlds they create.
    ========================================================================== */
 const Core = require('../../shared/core.js');
+const Progression = require('../../shared/progression.js');
 
 function createLobby(config, registry, auth, store, tokens) {
   return function handleConn(conn) {
@@ -113,6 +114,17 @@ function createLobby(config, registry, auth, store, tokens) {
           if (!account || !store.progression) return conn.send({ t: 'progression', progression: null });
           const p = await store.progression(account.id).catch(() => null);
           return conn.send({ t: 'progression', progression: p });
+        }
+        case 'stats': {   // signed-in: time-series history (net worth / xp / … over time)
+          if (!account || !store.statsFor) return conn.send({ t: 'stats', series: null });
+          let series = await store.statsFor(account.id).catch(() => ({}));
+          // seed the first point on first view so a returning player sees their
+          // current standing immediately (the periodic sampler adds the rest)
+          if ((!series || !Object.keys(series).length) && store.progression && store.recordStats) {
+            const p = await store.progression(account.id).catch(() => null);
+            if (p) { await store.recordStats(account.id, Progression.metrics(p)).catch(() => {}); series = await store.statsFor(account.id).catch(() => series); }
+          }
+          return conn.send({ t: 'stats', series: series || {} });
         }
         case 'create':
           return enterRoom(async () => {

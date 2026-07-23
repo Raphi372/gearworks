@@ -13,6 +13,7 @@ const Progression = require('../../shared/progression.js');
 
 function createFileStore(config) {
   const { SAVE_DIR, BACKUPS, log } = config;
+  const STAT_KEEP = config.STAT_KEEP || 168;
   if (!fs.existsSync(SAVE_DIR)) fs.mkdirSync(SAVE_DIR, { recursive: true });
 
   function roomPath(code) { return path.join(SAVE_DIR, `${code}.json`); }
@@ -143,6 +144,32 @@ function createFileStore(config) {
   // leaderboard), always fresh, never a separate source of truth
   function progression(aid) { return Progression.summarize(accountWorlds(aid)); }
 
+  /* -------- time-series stats (bounded ring per account+key) -------- */
+  const statsPath = path.join(SAVE_DIR, 'stats.json');
+  let statsCache = null;
+  function loadStats() {
+    if (statsCache) return statsCache;
+    try { statsCache = JSON.parse(fs.readFileSync(statsPath, 'utf8')); }
+    catch (e) { statsCache = {}; }
+    if (!statsCache || typeof statsCache !== 'object') statsCache = {};
+    return statsCache;
+  }
+  // append one point per metric for an account, trimmed to the last STAT_KEEP
+  function recordStats(accountId, samples, at) {
+    if (!accountId || !samples) return;
+    const s = loadStats();
+    const acct = s[accountId] || (s[accountId] = {});
+    const t = at || Date.now();
+    for (const key of Object.keys(samples)) {
+      const arr = acct[key] || (acct[key] = []);
+      arr.push({ t, v: Number(samples[key]) || 0 });
+      if (arr.length > STAT_KEEP) arr.splice(0, arr.length - STAT_KEEP);
+    }
+    try { fs.writeFileSync(statsPath, JSON.stringify(s)); }
+    catch (e) { log.error(`stats save failed: ${e.message}`); }
+  }
+  function statsFor(accountId) { return loadStats()[accountId] || {}; }
+
   return {
     kind: 'file',
     accountsEnabled: true,
@@ -155,6 +182,8 @@ function createFileStore(config) {
     worldsByMember: (aid) => Promise.resolve(worldsByMember(aid)),
     membership: (aid, code) => Promise.resolve(membership(aid, code)),
     progression: (aid) => Promise.resolve(progression(aid)),
+    recordStats: (aid, samples, at) => { recordStats(aid, samples, at); return Promise.resolve(); },
+    statsFor: (aid) => Promise.resolve(statsFor(aid)),
     topFactories: (limit) => Promise.resolve(topFactories(limit || 20)),
     recentRooms: (sinceMs) => Promise.resolve(recentRooms(sinceMs)),
     flush: () => Promise.resolve(),

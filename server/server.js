@@ -29,6 +29,7 @@ const { createAuth } = require('./players/accounts');
 const { createTokens } = require('./players/tokens');
 const { createMonitoring } = require('./monitoring');
 const { createMailer } = require('./mailer');
+const { createStatSampler } = require('./stats');
 
 const log = config.log;
 const monitor = createMonitoring(config);
@@ -42,6 +43,7 @@ async function main() {
 
   const registry = createRegistry(config, store, tokens);
   const auth = createAuth(config, store, mailer, tokens);
+  const stats = createStatSampler(config, registry, store);
   const handleConn = createLobby(config, registry, auth, store, tokens);
 
   const server = createHttpServer(config, {
@@ -74,6 +76,7 @@ async function main() {
 
   server.listen(config.PORT, config.HOST, () => {
     log(`Gearworks server listening`, { host: config.HOST, port: config.PORT, proto: config.PROTO, env: config.NODE_ENV });
+    stats.start();     // begin periodic time-series sampling (no-op if disabled)
   });
 
   // ---- graceful shutdown (Fly/Railway send SIGTERM; Ctrl-C sends SIGINT) ----
@@ -82,6 +85,7 @@ async function main() {
     if (closing) return;
     closing = true;
     log(`${signal} — saving all rooms and shutting down`);
+    stats.stop();
     registry.destroyAll('shutdown');     // each room writes a final save
     try { await store.flush(); await store.close(); } catch (e) { log.error(`store close: ${e.message}`); }
     server.close(() => process.exit(0));
