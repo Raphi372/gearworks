@@ -31,6 +31,9 @@ All via environment variables (12-factor). Defaults in parentheses.
 | `PRESENCE` | `local` | friend presence store: `local` (single instance) or `file` (shared dir) |
 | `PRESENCE_DIR` | `<SAVE_DIR>/presence` | presence files when `PRESENCE=file` |
 | `PRESENCE_TTL_MS` | `60000` | presence goes stale (→ offline) after this |
+| `INVITES` | `local` | world-invite store: `local` (single instance) or `file` (shared dir) |
+| `INVITE_DIR` | `<SAVE_DIR>/invites` | invite files when `INVITES=file` |
+| `INVITE_TTL_MIN` | `60` | a pending world invite expires after this many minutes |
 | `MAX_ROOMS` | `32` | rooms per process |
 | `MAX_PLAYERS_PER_ROOM` | `16` | seats per room |
 | `MAX_MSG_BYTES` | `524288` | inbound frame cap (flood guard) |

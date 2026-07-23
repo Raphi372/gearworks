@@ -84,6 +84,10 @@ const config = {
   PRESENCE: process.env.PRESENCE || 'local',
   PRESENCE_DIR: process.env.PRESENCE_DIR || '',               // defaults to <SAVE_DIR>/presence
   PRESENCE_TTL_MS: envInt('PRESENCE_TTL_MS', 60000),          // presence stale (→ offline) after this
+  // pending world invites (friend → your world). Ephemeral like presence.
+  INVITES: process.env.INVITES || 'local',
+  INVITE_DIR: process.env.INVITE_DIR || '',                   // defaults to <SAVE_DIR>/invites
+  INVITE_TTL_MS: envInt('INVITE_TTL_MIN', 60) * 60 * 1000,    // an invite expires after this
 
   // simulation / networking
   TICK_MS: 1000 / Core.Config.SIM_HZ,

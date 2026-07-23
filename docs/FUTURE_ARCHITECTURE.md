@@ -558,8 +558,16 @@ achievements, leaderboards, presence, and quickplay matchmaking.
 >   with each friend's presence and the client shows a status dot. Proven by a
 >   presence-module test + an end-to-end online → in-game → offline test.
 >
-> **Remaining slices:** profiles + cosmetics locker; achievements; world
-> invites; quickplay matchmaking; friend-scoped leaderboards.
+> - **Slice 3 (world invites):** `server/invites.js` — pending "join my world"
+>   invites, ephemeral like presence (`local` default | shared `file`, TTL).
+>   `invite` (friends-only + access-checked), `invites`, `inviteAccept` (→ the
+>   recipient joins via the existing resolve/connect-token handoff — an invite
+>   never bypasses authority), `inviteDecline`; a lobby invites panel + an
+>   Invite button on online friends. Proven by a module test + an end-to-end
+>   lobby test (invite → list → accept + authz).
+>
+> **Remaining slices:** profiles + cosmetics locker; achievements; quickplay
+> matchmaking; friend-scoped leaderboards.
 
 **Files affected**
 - `server/social/*`, `server/matchmaking/*`, `server/presence/*` (new control-plane
