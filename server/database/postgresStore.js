@@ -35,6 +35,15 @@ function createPostgresStore(config, snapshots) {
     const snapshot = (w.snapshotRef && w.snapshot == null) ? snapshots.get(w.snapshotRef) : w.snapshot;
     return { w, snapshot };
   }
+
+  // an ACCEPTED friendship is stored as a row in both directions
+  async function acceptPair(me, other) {
+    await prisma.$transaction([
+      prisma.friendship.upsert({ where: { accountId_otherId: { accountId: me, otherId: other } }, create: { accountId: me, otherId: other, status: 'ACCEPTED' }, update: { status: 'ACCEPTED' } }),
+      prisma.friendship.upsert({ where: { accountId_otherId: { accountId: other, otherId: me } }, create: { accountId: other, otherId: me, status: 'ACCEPTED' }, update: { status: 'ACCEPTED' } }),
+    ]).catch((e) => log.error(`pg friend accept failed: ${e.message}`));
+    return { ok: true };
+  }
   const prisma = new PrismaClient({ datasources: { db: { url: DATABASE_URL } } });
 
   // app role (lowercase) -> Prisma Role enum
@@ -171,6 +180,51 @@ function createPostgresStore(config, snapshots) {
       const out = {};
       rows.forEach((r) => { (out[r.key] || (out[r.key] = [])).push({ t: +r.recordedAt, v: Number(r.value) }); });
       return out;
+    },
+
+    /* ---- social graph ---- */
+    async friendGraph(accountId) {
+      const mine = await prisma.friendship.findMany({ where: { accountId }, include: { other: { select: { id: true, username: true } } } }).catch(() => []);
+      const incoming = await prisma.friendship.findMany({ where: { otherId: accountId, status: 'PENDING' }, include: { account: { select: { id: true, username: true } } } }).catch(() => []);
+      const pick = (r) => ({ id: r.other.id, username: r.other.username });
+      return {
+        friends: mine.filter((r) => r.status === 'ACCEPTED').map(pick),
+        outgoing: mine.filter((r) => r.status === 'PENDING').map(pick),
+        blocked: mine.filter((r) => r.status === 'BLOCKED').map(pick),
+        incoming: incoming.map((r) => ({ id: r.account.id, username: r.account.username })),
+      };
+    },
+    async friendRequest(from, to) {
+      if (!from || !to || from === to) return { error: 'invalid target' };
+      const blocks = await prisma.friendship.findMany({ where: { status: 'BLOCKED', OR: [{ accountId: from, otherId: to }, { accountId: to, otherId: from }] } }).catch(() => []);
+      if (blocks.length) return { error: 'unavailable' };
+      const mine = await prisma.friendship.findUnique({ where: { accountId_otherId: { accountId: from, otherId: to } } }).catch(() => null);
+      if (mine && mine.status === 'ACCEPTED') return { ok: true };
+      const reverse = await prisma.friendship.findUnique({ where: { accountId_otherId: { accountId: to, otherId: from } } }).catch(() => null);
+      if (reverse && reverse.status === 'PENDING') return acceptPair(from, to);   // they already asked
+      await prisma.friendship.upsert({ where: { accountId_otherId: { accountId: from, otherId: to } }, create: { accountId: from, otherId: to, status: 'PENDING' }, update: { status: 'PENDING' } }).catch((e) => log.error(`pg friend req failed: ${e.message}`));
+      return { ok: true };
+    },
+    async friendRespond(me, other, accept) {
+      const req = await prisma.friendship.findUnique({ where: { accountId_otherId: { accountId: other, otherId: me } } }).catch(() => null);
+      if (!req || req.status !== 'PENDING') return { error: 'no pending request' };
+      if (accept) return acceptPair(me, other);
+      await prisma.friendship.deleteMany({ where: { accountId: other, otherId: me, status: 'PENDING' } }).catch(() => {});
+      return { ok: true };
+    },
+    async friendRemove(me, other) {
+      await prisma.friendship.deleteMany({ where: { status: { in: ['ACCEPTED', 'PENDING'] }, OR: [{ accountId: me, otherId: other }, { accountId: other, otherId: me }] } }).catch(() => {});
+      return { ok: true };
+    },
+    async friendBlock(me, other, blocked) {
+      if (!other || me === other) return { error: 'invalid target' };
+      if (blocked) {
+        await prisma.friendship.deleteMany({ where: { status: { in: ['ACCEPTED', 'PENDING'] }, OR: [{ accountId: me, otherId: other }, { accountId: other, otherId: me }] } }).catch(() => {});
+        await prisma.friendship.upsert({ where: { accountId_otherId: { accountId: me, otherId: other } }, create: { accountId: me, otherId: other, status: 'BLOCKED' }, update: { status: 'BLOCKED' } }).catch(() => {});
+      } else {
+        await prisma.friendship.deleteMany({ where: { accountId: me, otherId: other, status: 'BLOCKED' } }).catch(() => {});
+      }
+      return { ok: true };
     },
     async topFactories(limit) {
       const rows = await prisma.factory.findMany({

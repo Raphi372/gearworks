@@ -50,6 +50,13 @@ Defined in `prisma/schema.prisma`:
   fresh — never a second source of truth. The Postgres backend also upserts
   the derived `Progression` row (keeping the modelled table live); the file
   backend recomputes from save metadata, exactly like the leaderboard.
+- **Friendship** — the social graph (Phase 2). Directed rows keyed
+  `@@unique([accountId, otherId])` with a `FriendStatus` (`PENDING`/`ACCEPTED`/
+  `BLOCKED`): a `PENDING` row is a request, an `ACCEPTED` friendship is stored
+  in **both** directions, a `BLOCKED` row is one-directional. Indexed
+  `([otherId, status])` for the "requests to me" query. The file backend keeps
+  the same graph in `friends.json`. Served over the lobby via `friends` /
+  `friendReq` / `friendResp` / `friendRemove` / `friendBlock`.
 - **Stat** — time-series counters, one row per `(account, key, recordedAt)`.
   A periodic sampler (`server/stats.js`, every `STAT_SAMPLE_MIN` minutes;
   `0` disables it) records one point per metric — `net_worth`, `entities`,

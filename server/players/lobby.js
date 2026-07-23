@@ -148,6 +148,29 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory) 
           }
           return conn.send({ t: 'stats', series: series || {} });
         }
+        /* ------------------------------ social ------------------------------ */
+        case 'friends':
+        case 'friendReq':
+        case 'friendResp':
+        case 'friendRemove':
+        case 'friendBlock': {
+          if (!account || !store.friendGraph) return conn.send({ t: 'friends', graph: null });
+          let error = null;
+          if (m.t === 'friendReq') {
+            const target = await store.getAccountByName(String(m.username || '').trim()).catch(() => null);
+            if (!target) error = 'no player with that name';
+            else if (target.id === account.id) error = "you can't add yourself";
+            else error = (await store.friendRequest(account.id, target.id).catch(() => ({ error: 'failed' }))).error || null;
+          } else if (m.t === 'friendResp') {
+            error = (await store.friendRespond(account.id, String(m.id || ''), !!m.accept).catch(() => ({ error: 'failed' }))).error || null;
+          } else if (m.t === 'friendRemove') {
+            await store.friendRemove(account.id, String(m.id || '')).catch(() => {});
+          } else if (m.t === 'friendBlock') {
+            await store.friendBlock(account.id, String(m.id || ''), !!m.blocked).catch(() => {});
+          }
+          const graph = await store.friendGraph(account.id).catch(() => null);
+          return conn.send({ t: 'friends', graph, error });
+        }
         case 'create':
           return enterRoom(async () => {
             if (config.MAINTENANCE) return conn.send({ t: 'err', reason: 'server is in maintenance — try again shortly' });
