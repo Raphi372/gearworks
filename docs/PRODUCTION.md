@@ -100,11 +100,13 @@ All via environment variables (12-factor). Defaults in parentheses.
 - `GET /metrics` → **Prometheus** text exposition (`server/metrics.js`). Series
   (all prefixed `gearworks_`): `rooms`, `connections`, `ticks_total`,
   `ticks_per_second`, `commands_total`, `messages_total`, `connections_total`,
-  `divergences_total`, `resyncs_total`, `errors_total`, `rtt_ms_p50`,
-  `rtt_ms_p95`, `uptime_seconds`. RTT is the client-measured round trip echoed
-  on its ping. Scrape it from Prometheus/Grafana Agent/Fly metrics and alert on
-  `ticks_per_second` dropping, `rtt_ms_p95` climbing, or `divergences_total`
-  rising. Set `METRICS_TOKEN` to require `Authorization: Bearer <token>`.
+  `divergences_total`, `resyncs_total`, `errors_total`, `bans_total`,
+  `reports_total`, `flags_total`, `rtt_ms_p50`, `rtt_ms_p95`, `uptime_seconds`.
+  RTT is the client-measured round trip echoed on its ping; `bans/reports/flags`
+  count moderation + anti-cheat activity (Phase 2/3). Scrape it from
+  Prometheus/Grafana Agent/Fly metrics and alert on `ticks_per_second` dropping,
+  `rtt_ms_p95` climbing, `divergences_total` rising, or a `flags_total` spike.
+  Set `METRICS_TOKEN` to require `Authorization: Bearer <token>`.
 - Structured JSON logs in production (one line per event) — ship to the
   platform's log drain (Fly/Railway both aggregate stdout).
 - Divergence events log at `warn` with the room and tick — a spike is a

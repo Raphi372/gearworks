@@ -22,7 +22,8 @@ function createMetrics(config, deps) {
   const gauges = deps.gauges || (() => ({}));      // live { rooms, connections }
   const startedAt = Date.now();
 
-  const c = { ticks: 0, commands: 0, messages: 0, connections: 0, divergences: 0, resyncs: 0, errors: 0 };
+  const c = { ticks: 0, commands: 0, messages: 0, connections: 0, divergences: 0, resyncs: 0, errors: 0,
+    bans: 0, reports: 0, flags: 0 };   // moderation / anti-cheat (Phase 2/3)
 
   // RTT sketch: a fixed ring of the most recent client-reported round trips
   const RTT_CAP = 1024;
@@ -78,6 +79,9 @@ function createMetrics(config, deps) {
       divergences_total: c.divergences,
       resyncs_total: c.resyncs,
       errors_total: c.errors,
+      bans_total: c.bans,
+      reports_total: c.reports,
+      flags_total: c.flags,
       rtt_ms_p50: r.p50,
       rtt_ms_p95: r.p95,
       rtt_samples: r.count,
@@ -96,6 +100,9 @@ function createMetrics(config, deps) {
     ['divergences_total', 'counter', 'Client/server state-hash divergences', 'divergences_total'],
     ['resyncs_total', 'counter', 'Authoritative snapshots resent to clients', 'resyncs_total'],
     ['errors_total', 'counter', 'Reported process errors', 'errors_total'],
+    ['bans_total', 'counter', 'Account bans issued', 'bans_total'],
+    ['reports_total', 'counter', 'Player reports filed', 'reports_total'],
+    ['flags_total', 'counter', 'Anti-cheat flags recorded', 'flags_total'],
     ['rtt_ms_p50', 'gauge', 'Client round-trip time p50 in ms', 'rtt_ms_p50'],
     ['rtt_ms_p95', 'gauge', 'Client round-trip time p95 in ms', 'rtt_ms_p95'],
   ];
@@ -120,6 +127,9 @@ function createMetrics(config, deps) {
     recordResync() { c.resyncs++; },
     recordError() { c.errors++; },
     recordDivergence() { c.divergences++; divWindow.push(Date.now()); },
+    recordBan() { c.bans++; },
+    recordReport() { c.reports++; },
+    recordFlag() { c.flags++; },
     recordRtt(ms) { if (!isFinite(ms) || ms < 0 || ms > 60000) return; rtt[rttI] = ms; rttI = (rttI + 1) % RTT_CAP; if (rttN < RTT_CAP) rttN++; },
     checkDivergenceSpike, snapshot, prometheus, stop,
     token: config.METRICS_TOKEN || '',       // optional bearer for /metrics

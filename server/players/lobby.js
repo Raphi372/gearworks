@@ -226,6 +226,7 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
         case 'report': {   // flag another player for admin review
           if (!account || !moderation) return conn.send({ t: 'reported', error: 'sign in to report' });
           const r = await moderation.report(account.id, account.username, m.username, m.reason);
+          if (!r.error && metrics && metrics.recordReport) metrics.recordReport();
           return conn.send({ t: 'reported', ok: !r.error, error: r.error || null });
         }
         case 'mod':
@@ -237,7 +238,7 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
             return conn.send({ t: 'mod', bans: null, reports: null, flags: null, error: 'not authorized' });
           }
           let error = null;
-          if (m.t === 'ban') error = (await moderation.ban(account.username, m.username, m.reason, m.days)).error || null;
+          if (m.t === 'ban') { error = (await moderation.ban(account.username, m.username, m.reason, m.days)).error || null; if (!error && metrics && metrics.recordBan) metrics.recordBan(); }
           else if (m.t === 'unban') error = (await moderation.unban(account.username, m.username)).error || null;
           else if (m.t === 'reportResolve') error = (await moderation.resolveReport(account.username, m.id, m.action)).error || null;
           else if (m.t === 'flagClear') error = (await moderation.clearFlag(account.username, m.id)).error || null;
