@@ -99,10 +99,12 @@ const config = {
   PRESENCE_REFRESH_MS: envInt('PRESENCE_REFRESH_MS', 5000),   // redis backend: cluster-cache refresh interval
   // optional Redis (RESP) endpoint for the shared ephemeral cache (PRESENCE=redis).
   REDIS_URL: process.env.REDIS_URL || '',                     // e.g. redis://:pass@host:6379
-  // pending world invites (friend → your world). Ephemeral like presence.
+  // pending world invites (friend → your world). Ephemeral like presence:
+  // 'local' | 'file' (shared dir) | 'redis' (shared cache, uses REDIS_URL).
   INVITES: process.env.INVITES || 'local',
   INVITE_DIR: process.env.INVITE_DIR || '',                   // defaults to <SAVE_DIR>/invites
   INVITE_TTL_MS: envInt('INVITE_TTL_MIN', 60) * 60 * 1000,    // an invite expires after this
+  INVITE_REFRESH_MS: envInt('INVITE_REFRESH_MS', 5000),      // redis backend: cluster-cache refresh interval
 
   // simulation / networking
   TICK_MS: 1000 / Core.Config.SIM_HZ,

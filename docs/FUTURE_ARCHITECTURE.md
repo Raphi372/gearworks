@@ -744,8 +744,13 @@ global-identity features (moderation, anti-cheat depth).
 >   (`PRESENCE=redis` is opt-in; a Redis blip degrades the cache, not the
 >   instance). Proven against a mock RESP server: the wire protocol round-trips
 >   (SET/GET/DEL/KEYS/MGET/PING) and presence written on one instance is visible
->   on another after a refresh. The same write-through pattern extends to the
->   directory cache / invites next.
+>   on another after a refresh. The write-through cache is factored into
+>   `server/redisCache.js` (generic `{put,get,del,all,refresh,close}`) and now
+>   also backs **world invites** (`INVITES=redis`) — an invite created on one
+>   instance reaches the recipient on another via the same shared cache; proven
+>   by a second mock-RESP test. The directory read-cache is the remaining
+>   candidate (its `claim` CAS needs strong consistency, so that one stays a
+>   dedicated effort).
 >
 > **Phase 3 is complete** — moderation (bans · reports · anti-cheat flags feed one
 > admin queue), the regional server picker, and the full data-scaling tier
