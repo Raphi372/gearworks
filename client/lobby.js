@@ -150,6 +150,16 @@ var Lobby = (function () {
       else eq[c.dataset.cosKind] = c.dataset.cosKey;
       browserSess.sendSetProfile({ equipped: eq });
     });
+    el('lb-mod').addEventListener('click', function (e) {
+      if (!browserSess) return;
+      var un = e.target.closest('[data-unban]');
+      if (un) { if (un.dataset.unban) browserSess.sendUnban(un.dataset.unban); return; }
+      if (e.target.closest('#mod-ban')) {
+        var u = (el('mod-user').value || '').trim();
+        if (!u) { err('Enter a username to ban'); return; }
+        browserSess.sendBan(u, (el('mod-reason').value || '').trim(), (+el('mod-days').value || 0));
+      }
+    });
     el('reconn-leave').onclick = function () { location.reload(); };
     renderAccount();
     applyDiscovery();   // pre-warm the current server address before Multiplayer is opened
@@ -300,7 +310,7 @@ var Lobby = (function () {
     authToken = m.token;
     try { localStorage.setItem('gearworks_token', authToken); } catch (e) {}
     renderAccount();
-    if (browserSess) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); browserSess.requestProfile(); }
+    if (browserSess) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); browserSess.requestProfile(); if (account && account.admin) browserSess.requestBans(); }
   }
 
   function onAccount(m) {
@@ -322,6 +332,7 @@ var Lobby = (function () {
     el('lb-invites').innerHTML = '';
     el('lb-achievements').innerHTML = '';
     el('lb-profile').innerHTML = ''; viewingProfile = null; profileCatalog = [];
+    el('lb-mod').innerHTML = '';
     lbScope = 'global'; el('lb-lb-scope').textContent = 'Friends';
     if (browserSess) browserSess.requestLeaderboard('global');   // back to the global board
   }
@@ -399,6 +410,29 @@ var Lobby = (function () {
     var eq = {};
     profileCatalog.forEach(function (c) { if (c.equipped) eq[c.kind] = c.key; });
     return eq;
+  }
+
+  // admin-only moderation panel: ban by username (optional reason/days) + the
+  // list of active bans with an unban button. Shown only to admins.
+  function onMod(bans, error) {
+    var host = el('lb-mod');
+    if (!host) return;
+    if (!account || !account.admin || bans === null) { host.innerHTML = ''; return; }
+    var h = '<div class="divider"></div><b style="font-size:13px">🛡 Moderation</b>' +
+      '<div style="display:flex;gap:6px;margin:6px 0">' +
+      '<input class="txt" id="mod-user" placeholder="username" style="flex:1;margin:0" maxlength="20">' +
+      '<input class="txt" id="mod-days" placeholder="days" style="width:52px;margin:0" maxlength="4" inputmode="numeric">' +
+      '<button class="btn gray" id="mod-ban">Ban</button></div>' +
+      '<input class="txt" id="mod-reason" placeholder="reason (optional)" style="width:100%;margin:0 0 4px" maxlength="200">';
+    if (error) h += '<div style="color:#ff7a7a;font-size:11px;margin-bottom:4px">' + esc(error) + '</div>';
+    if (!bans.length) h += '<div class="acc-guest">No active bans.</div>';
+    bans.forEach(function (b) {
+      var when = b.until ? 'until ' + new Date(b.until).toISOString().slice(0, 10) : 'permanent';
+      h += '<div class="world-row"><div><div class="wn">' + esc(b.username || b.id) + '</div>' +
+        '<div class="wd">' + esc(b.reason || 'no reason') + ' • ' + when + '</div></div>' +
+        '<button class="btn gray" data-unban="' + esc(b.username || '') + '">Unban</button></div>';
+    });
+    host.innerHTML = h;
   }
 
   function onInvites(list) {
@@ -552,7 +586,7 @@ var Lobby = (function () {
   function reconnectBrowser() {
     // reuse the existing connection only if it targets the same address;
     // discovery/refresh can change the address and must reconnect.
-    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); browserSess.requestProfile(); } return; }
+    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); browserSess.requestProfile(); if (account && account.admin) browserSess.requestBans(); } return; }
     if (browserSess) { browserSess.leave(); browserSess = null; }
     savePrefs();
     setDot('warn');
@@ -563,7 +597,7 @@ var Lobby = (function () {
       lobby: function (rooms, m) {
         setDot('on');
         if (m && m.maintenance) el('lb-maint').classList.remove('hidden'); else el('lb-maint').classList.add('hidden');
-        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); browserSess.requestProfile(); }
+        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); browserSess.requestProfile(); if (account && account.admin) browserSess.requestBans(); }
         if (pendingVerify) { browserSess.sendVerifyEmail(pendingVerify); pendingVerify = null; }
         browserSess.requestLeaderboard(lbScope);
         onRooms(rooms);
@@ -576,6 +610,7 @@ var Lobby = (function () {
       stats: function (series) { onStats(series); },
       achievements: function (a) { onAchievements(a); },
       profile: function (p, mine) { onProfile(p, mine); },
+      mod: function (bans, error) { onMod(bans, error); },
       friends: function (mm) { onFriends(mm); },
       invites: function (list) { onInvites(list); },
       invited: function (mm) { if (mm && mm.error) err(mm.error); else if (browserSess) browserSess.requestInvites(); },

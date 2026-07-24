@@ -271,6 +271,39 @@ function createFileStore(config, snapshots) {
     return getProfile(id);
   }
 
+  /* -------- moderation: account bans (JSON on disk) -------- */
+  const bansPath = path.join(SAVE_DIR, 'bans.json');
+  let bans = null;
+  function loadBans() {
+    if (bans) return bans;
+    try { bans = JSON.parse(fs.readFileSync(bansPath, 'utf8')); } catch (e) { bans = {}; }
+    if (!bans || typeof bans !== 'object') bans = {};
+    return bans;
+  }
+  function persistBans() {
+    try { fs.writeFileSync(bansPath, JSON.stringify(loadBans())); }
+    catch (e) { log.error(`bans save failed: ${e.message}`); }
+  }
+  function active(b) { return b && (!b.until || b.until > Date.now()); }   // until 0 = permanent
+  function banAccount(id, ban) { loadBans()[id] = { reason: ban.reason || '', by: ban.by || '', at: ban.at || Date.now(), until: ban.until || 0 }; persistBans(); return { ok: true }; }
+  function unbanAccount(id) { const b = loadBans(); if (b[id]) { delete b[id]; persistBans(); } return { ok: true }; }
+  // active ban for an account, or null (a lapsed ban is cleared lazily)
+  function getBan(id) {
+    const b = loadBans()[id];
+    if (!b) return null;
+    if (!active(b)) { unbanAccount(id); return null; }
+    return b;
+  }
+  function listBans() {
+    const b = loadBans(); const accts = loadAccounts(); const out = [];
+    for (const id of Object.keys(b)) {
+      if (!active(b[id])) continue;
+      out.push({ id, username: accts.byId[id] ? accts.byId[id].username : null,
+        reason: b[id].reason, by: b[id].by, at: b[id].at, until: b[id].until });
+    }
+    return out.sort((x, y) => y.at - x.at);
+  }
+
   return {
     kind: 'file',
     accountsEnabled: true,
@@ -292,6 +325,10 @@ function createFileStore(config, snapshots) {
     friendBlock: (me, other, blocked) => Promise.resolve(friendBlock(me, other, blocked)),
     getProfile: (id) => Promise.resolve(getProfile(id)),
     setProfile: (id, patch) => Promise.resolve(setProfile(id, patch)),
+    banAccount: (id, ban) => Promise.resolve(banAccount(id, ban)),
+    unbanAccount: (id) => Promise.resolve(unbanAccount(id)),
+    getBan: (id) => Promise.resolve(getBan(id)),
+    listBans: () => Promise.resolve(listBans()),
     topFactories: (limit, ownerIds) => Promise.resolve(topFactories(limit || 20, ownerIds)),
     recentRooms: (sinceMs) => Promise.resolve(recentRooms(sinceMs)),
     flush: () => Promise.resolve(),

@@ -107,6 +107,9 @@ const config = {
   RECONNECT_TTL_MS: envInt('RECONNECT_TTL_MIN', 60) * 60 * 1000,
   LOGIN_MAX_ATTEMPTS: envInt('LOGIN_MAX_ATTEMPTS', 8),   // per username per 15 min
   MAINTENANCE: process.env.MAINTENANCE === '1',    // reject new games with a notice
+  // moderation: comma-separated usernames (case-insensitive) granted the ban
+  // tools. Empty by default, so the $0 single-instance deploy has no admins.
+  ADMIN_USERS: (process.env.ADMIN_USERS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
 
   // account recovery (password reset / email verification)
   RESET_TTL_MIN: envInt('RESET_TTL_MIN', 45),      // reset/verify token lifetime

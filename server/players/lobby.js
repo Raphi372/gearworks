@@ -17,7 +17,10 @@ const Progression = require('../../shared/progression.js');
 const Achievements = require('../../shared/achievements.js');
 const Cosmetics = require('../../shared/cosmetics.js');
 
-function createLobby(config, registry, auth, store, tokens, metrics, directory, presence, invites) {
+function createLobby(config, registry, auth, store, tokens, metrics, directory, presence, invites, moderation) {
+  // the account payload sent to the client, tagged with whether it's an admin
+  // (so the client can show the moderation panel; the flag is never trusted).
+  function outAcct(a) { return a ? Object.assign({}, a, { admin: !!(moderation && moderation.isAdmin(a.username)) }) : null; }
   return function handleConn(conn) {
     if (metrics) metrics.recordConnection();
     let client = null;    // set once inside a room
@@ -75,7 +78,7 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
           if (m.authToken) account = await auth.fromToken(m.authToken);   // silent auto-login
           touchOnline();
           conn.send({ t: 'lobby', proto: Core.PROTO, rooms: registry.publicRooms(),
-            account: account || null, maintenance: config.MAINTENANCE });
+            account: outAcct(account), maintenance: config.MAINTENANCE });
           return;
         }
         case 'auth': {
@@ -97,19 +100,19 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
           if (res.error) return conn.send({ t: 'auth', ok: false, error: res.error });
           account = res.account;
           touchOnline();
-          conn.send({ t: 'auth', ok: true, account: res.account, token: res.token });
+          conn.send({ t: 'auth', ok: true, account: outAcct(res.account), token: res.token });
           return;
         }
         case 'logout': goneOffline(); account = null; return;
         case 'setEmail': {
           const r = await auth.setEmail({ account, email: m.email });
           if (r.account) account = r.account;
-          return conn.send({ t: 'account', ok: !r.error, error: r.error, account: account || null });
+          return conn.send({ t: 'account', ok: !r.error, error: r.error, account: outAcct(account) });
         }
         case 'verifyEmail': {
           const r = await auth.verifyEmail({ token: m.token });
           if (!r.error && account && r.account && r.account.id === account.id) account = r.account;
-          return conn.send({ t: 'account', ok: !r.error, error: r.error, account: account || null });
+          return conn.send({ t: 'account', ok: !r.error, error: r.error, account: outAcct(account) });
         }
         case 'listRooms':
           conn.send({ t: 'lobby', proto: Core.PROTO, rooms: registry.publicRooms(), account: account || null, maintenance: config.MAINTENANCE });
@@ -206,6 +209,22 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
             loadout: Cosmetics.resolve(stored.equipped, summary),
             catalog: Cosmetics.catalog(summary, stored.equipped),
           } });
+        }
+        /* ---------------------------- moderation ---------------------------- */
+        // Admin-only (ADMIN_USERS). Bans are enforced server-side at login /
+        // session resume; issuing one bumps the target's tokenVersion so any
+        // live session dies immediately.
+        case 'mod':
+        case 'ban':
+        case 'unban': {
+          if (!account || !moderation || !moderation.isAdmin(account.username)) {
+            return conn.send({ t: 'mod', bans: null, error: 'not authorized' });
+          }
+          let error = null;
+          if (m.t === 'ban') error = (await moderation.ban(account.username, m.username, m.reason, m.days)).error || null;
+          else if (m.t === 'unban') error = (await moderation.unban(account.username, m.username)).error || null;
+          const res = await moderation.list(account.username);
+          return conn.send({ t: 'mod', bans: res.bans || [], error: error || res.error || null });
         }
         /* ------------------------------ social ------------------------------ */
         case 'friends':
