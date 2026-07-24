@@ -713,6 +713,19 @@ global-identity features (moderation, anti-cheat depth).
 >   backends and the whole $0 file deploy are byte-for-byte unchanged. Proven by
 >   a mock-S3 round-trip test (put/get/delete, missing-key → null, and a
 >   SigV4-signed `AWS4-HMAC-SHA256` authorization) + the composition guard.
+>
+> - **Slice 6 (read-replica routing):** `server/database/replica.js` — a pure
+>   router that, given the primary + an optional `DATABASE_REPLICA_URL` client,
+>   classifies every query: **writes and authorization reads always use the
+>   primary; lag-tolerant listing/analytics reads (leaderboard, "my worlds",
+>   stats history) use the replica** when one exists ([DB-9]). The load-bearing
+>   safety rule is that a membership/ban/account check is **never** served from a
+>   lagging replica, so revoked access can't be granted by stale data. The
+>   Postgres store routes its reads accordingly (`db.read` vs the primary for
+>   `membership`/accounts/bans/writes); a replica outage is non-fatal (reads
+>   degrade, primary unaffected). No replica → everything collapses to the
+>   primary, single-database deploy unchanged. Proven by a routing unit test (the
+>   authz/write-never-replica invariant holds under every configuration).
 
 **Files affected**
 - Infra: per-region deploy config (regions, endpoints), regional Prometheus scrape.

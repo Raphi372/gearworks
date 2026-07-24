@@ -111,6 +111,17 @@ save) joined to `World`/`Account` for the world name and owner. The lobby serves
 it publicly via the `leaderboard` message, and the client renders it in the
 lobby (own worlds highlighted).
 
+## Read replicas ([DB-9])
+
+Set an optional `DATABASE_REPLICA_URL` to scale reads. `server/database/replica.js`
+classifies every query: **writes and authorization reads (accounts, membership,
+bans) always use the primary**, while **lag-tolerant listing/analytics reads
+(leaderboard, "my worlds", stats history) use the replica**. The safety rule is
+that an access-control check is never served from an eventually-consistent
+replica, so revoked access can't be granted by stale data. With no replica URL
+set, every query uses the primary and the deploy is unchanged. A replica outage
+is non-fatal — those reads degrade while the primary keeps serving.
+
 ## Setup
 
 ```bash

@@ -49,6 +49,9 @@ const config = {
   STORAGE: (process.env.STORAGE || 'file').toLowerCase(),   // 'file' | 'postgres'
   SAVE_DIR: path.resolve(ROOT, flag('--save-dir', process.env.SAVE_DIR || 'saves')),
   DATABASE_URL: process.env.DATABASE_URL || '',
+  // optional read replica ([DB-9]): lag-tolerant listing/leaderboard/stats reads
+  // route here; writes + authorization reads always use the primary DATABASE_URL.
+  DATABASE_REPLICA_URL: process.env.DATABASE_REPLICA_URL || '',
   BACKUPS: envInt('BACKUPS', 5),
   LOAD_FILE: flag('--load', process.env.LOAD_FILE || null),
   // on boot, re-create rooms saved within this window so a restart/deploy or
