@@ -29,6 +29,9 @@ function createStore(config) {
     config.log('persistence: PostgreSQL backend');
     return createPostgresStore(config, snapshots);
   }
+  // the file backend's save path is synchronous (SIGTERM flush); an async blob
+  // backend (s3) can't be awaited there, so it pairs with STORAGE=postgres.
+  if (snapshots.async) throw new Error(`SNAPSHOT_STORE=${snapshots.mode} requires STORAGE=postgres`);
   config.log(`persistence: file backend (${config.SAVE_DIR})`);
   return createFileStore(config, snapshots);
 }

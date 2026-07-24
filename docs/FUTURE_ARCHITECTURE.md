@@ -502,10 +502,11 @@ single-instance mode stays byte-for-byte the current behavior.
 >   by a CAS test and a two-process redirect test. Single-instance unchanged.
 >
 > **Remaining (deployment-level, deferred):** the Postgres directory backend +
-> `RoomDirectory`/`Region` schema and the `s3`/R2 snapshot backend — both
-> mechanical mirrors behind the now-proven contracts, landing with the regional
-> Postgres deployment (Phase 3). Every scale *mechanism* is built and tested;
-> what remains is wiring the durable/cloud backends behind the same seams.
+> `RoomDirectory`/`Region` schema — a mechanical mirror behind the now-proven
+> contract, landing with the regional Postgres deployment. (The `s3`/R2 snapshot
+> backend has since landed — Phase 3, slice 5.) Every scale *mechanism* is built
+> and tested; what remains is wiring the durable directory backend behind the
+> same seam.
 
 **Files affected**
 - `server/directory/*` (new): directory interface + Postgres backend (+ optional
@@ -699,6 +700,19 @@ global-identity features (moderation, anti-cheat depth).
 >   (accumulate/threshold/cooldown/decay/anon-ignored/disabled) + an integration
 >   test (a command-spamming client is flagged in a live room and an admin sees +
 >   dismisses it), and browser-verified.
+>
+> - **Slice 5 (object-storage snapshots):** the `s3` backend for
+>   `snapshotStore` — a **zero-dependency SigV4** PUT/GET/DELETE over Node's
+>   http(s) (like the mailer), addressing S3/Cloudflare R2 path-style. It
+>   completes the externalized-blob split so any instance can load any world from
+>   cloud storage ([DB-3]/[DB-6], §3.4). Object storage is network I/O, so the
+>   blob store's contract gained an `async` flag: `put`/`get` are awaited, and
+>   because the file backend's save path is synchronous (SIGTERM flush), `s3` is
+>   paired with `STORAGE=postgres` (whose write path is already an async queue) —
+>   the composition refuses `file`+`s3` with a clear error. The `inline`/`fs`
+>   backends and the whole $0 file deploy are byte-for-byte unchanged. Proven by
+>   a mock-S3 round-trip test (put/get/delete, missing-key → null, and a
+>   SigV4-signed `AWS4-HMAC-SHA256` authorization) + the composition guard.
 
 **Files affected**
 - Infra: per-region deploy config (regions, endpoints), regional Prometheus scrape.
