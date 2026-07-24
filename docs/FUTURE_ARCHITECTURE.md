@@ -726,6 +726,28 @@ global-identity features (moderation, anti-cheat depth).
 >   degrade, primary unaffected). No replica → everything collapses to the
 >   primary, single-database deploy unchanged. Proven by a routing unit test (the
 >   authz/write-never-replica invariant holds under every configuration).
+>
+> - **Slice 7 (Redis ephemeral cache):** `server/redis.js` — a **zero-dependency
+>   RESP client** (raw TCP, pipelined, soft-fail + reconnect; no `redis`/`ioredis`
+>   npm dep, [A-7]) — and a `redis` presence backend behind the existing
+>   synchronous `{put,get,del}` contract. Because presence is read synchronously
+>   (friends-list enrichment) while Redis I/O is async, the backend is a
+>   **write-through local cache**: writes update the mirror immediately (this
+>   instance's own users are always fresh) and replicate to Redis with a TTL; a
+>   periodic refresh (`PRESENCE_REFRESH_MS`) pulls the whole cluster's presence
+>   back into the mirror, so other instances' users appear within one interval —
+>   well under the presence TTL. `local`/`file` and the $0 deploy are unchanged
+>   (`PRESENCE=redis` is opt-in; a Redis blip degrades the cache, not the
+>   instance). Proven against a mock RESP server: the wire protocol round-trips
+>   (SET/GET/DEL/KEYS/MGET/PING) and presence written on one instance is visible
+>   on another after a refresh. The same write-through pattern extends to the
+>   directory cache / invites next.
+>
+> **Phase 3 is complete** — moderation (bans · reports · anti-cheat flags feed one
+> admin queue), the regional server picker, and the full data-scaling tier
+> (object-storage snapshots · read replicas · a Redis ephemeral cache) all land
+> additively; the single-instance $0 file deploy is byte-for-byte unchanged with
+> every scale subsystem disabled by default.
 
 **Files affected**
 - Infra: per-region deploy config (regions, endpoints), regional Prometheus scrape.
