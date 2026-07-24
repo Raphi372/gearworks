@@ -20,7 +20,7 @@
    Inert by default unless a store with `recordFlag` is wired and the threshold
    is non-zero.
    ========================================================================== */
-function createAntiCheat(config, store) {
+function createAntiCheat(config, store, metrics) {
   const THRESH = config.ANTICHEAT_FLAG_SCORE | 0;
   const DECAY_MS = Math.max(1000, config.ANTICHEAT_DECAY_MS | 0);
   const COOLDOWN_MS = Math.max(0, config.ANTICHEAT_COOLDOWN_MS | 0);
@@ -50,6 +50,7 @@ function createAntiCheat(config, store) {
       const reached = Math.round(s.score);
       s.flaggedAt = now;
       s.score = 0;   // reset after flagging so the cooldown governs the next one
+      if (metrics && metrics.recordFlag) metrics.recordFlag();
       Promise.resolve(store.recordFlag({ accountId: c.aid, name: s.name, roomCode: roomCode || null, reason: kind, score: reached })).catch(() => {});
     }
   }

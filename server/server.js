@@ -55,7 +55,7 @@ async function main() {
   const directory = createDirectory(config);   // room router (local no-op | shared)
   const presence = createPresence(config);     // ephemeral online/in-game status
   const invites = createInvites(config);       // pending world invites
-  const anticheat = createAntiCheat(config, store);     // anomaly scoring → admin flags
+  const anticheat = createAntiCheat(config, store, metrics);   // anomaly scoring → admin flags
   registry = createRegistry(config, store, tokens, metrics, directory, presence, anticheat);
   const auth = createAuth(config, store, mailer, tokens);
   const moderation = createModeration(config, store);   // account bans (admins via ADMIN_USERS)

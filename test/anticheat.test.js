@@ -20,16 +20,19 @@ function fakeStore() {
 
 test('the scorer flags an authed subject once its weighted score crosses the threshold', async () => {
   const store = fakeStore();
-  const ac = createAntiCheat({ ANTICHEAT_FLAG_SCORE: 30, ANTICHEAT_DECAY_MS: 15000, ANTICHEAT_COOLDOWN_MS: 60000 }, store);
+  // threshold 25 (< two rate signals = 20, ≤ three = 30) so the crossing has
+  // margin: the scorer decays before each add, so a threshold set exactly to the
+  // summed weight would land fractionally under it and flap under CI timing.
+  const ac = createAntiCheat({ ANTICHEAT_FLAG_SCORE: 25, ANTICHEAT_DECAY_MS: 15000, ANTICHEAT_COOLDOWN_MS: 60000 }, store);
   const c = { aid: 'acc1', name: 'Suspect' };
-  ac.signal('rate', c, 'ROOM01');   // +10
-  ac.signal('rate', c, 'ROOM01');   // +10
+  ac.signal('rate', c, 'ROOM01');   // +10 → ~10
+  ac.signal('rate', c, 'ROOM01');   // +10 → ~20  (< 25)
   assert.strictEqual(store.flags.length, 0, 'below threshold: no flag');
-  ac.signal('rate', c, 'ROOM01');   // +10 → 30 ≥ 30
+  ac.signal('rate', c, 'ROOM01');   // +10 → ~30  (≥ 25)
   await sleep(5);
   assert.strictEqual(store.flags.length, 1, 'crossing the threshold records a flag');
   assert.strictEqual(store.flags[0].accountId, 'acc1');
-  assert.ok(store.flags[0].score >= 30);
+  assert.ok(store.flags[0].score >= 25);
 
   // within the cooldown, more signals do not re-flag
   for (let i = 0; i < 10; i++) ac.signal('rate', c, 'ROOM01');
