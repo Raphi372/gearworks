@@ -35,6 +35,7 @@ const { createDirectory } = require('./world/directory');
 const { createPresence } = require('./presence');
 const { createInvites } = require('./invites');
 const { createModeration } = require('./moderation');
+const { createAntiCheat } = require('./anticheat');
 
 const log = config.log;
 const monitor = createMonitoring(config);
@@ -54,7 +55,8 @@ async function main() {
   const directory = createDirectory(config);   // room router (local no-op | shared)
   const presence = createPresence(config);     // ephemeral online/in-game status
   const invites = createInvites(config);       // pending world invites
-  registry = createRegistry(config, store, tokens, metrics, directory, presence);
+  const anticheat = createAntiCheat(config, store);     // anomaly scoring → admin flags
+  registry = createRegistry(config, store, tokens, metrics, directory, presence, anticheat);
   const auth = createAuth(config, store, mailer, tokens);
   const moderation = createModeration(config, store);   // account bans (admins via ADMIN_USERS)
   const stats = createStatSampler(config, registry, store);

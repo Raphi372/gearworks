@@ -27,6 +27,7 @@ class Room {
     this.onClose = deps.onClose;         // (code) => void, removes us from the registry
     this.metrics = deps.metrics || null; // observability recorder (optional)
     this.presence = deps.presence || null;   // ephemeral online/in-game status (optional)
+    this.anticheat = deps.anticheat || null; // anomaly scorer (optional)
 
     this.code = opts.code;
     this.name = String(opts.name || 'Gearworks World').slice(0, 40);
@@ -77,7 +78,7 @@ class Room {
     for (const q of this.queue) {
       const err = g.Commands.validate(q);
       if (err) {
-        if (q._c) q._c.conn.send({ t: 'rej', q: q._q, reason: err });
+        if (q._c) { q._c.conn.send({ t: 'rej', q: q._q, reason: err }); if (this.anticheat) this.anticheat.signal('reject', q._c, this.code); }
         continue;
       }
       const wire = Object.assign({}, q);
@@ -208,14 +209,18 @@ class Room {
         if (typeof m.cmd !== 'object' || !m.cmd) return;
         // permission gate
         const need = this.game.Commands.PERMS[m.cmd.t];
-        if (need === 'server') return c.conn.send({ t: 'rej', q: m.q, reason: 'server-only' });
-        if (c.role === 'spectator') return c.conn.send({ t: 'rej', q: m.q, reason: 'spectators cannot act' });
-        if (need === 'admin' && c.role !== 'admin' && c.role !== 'host')
+        // a client sending a server-only / above-its-role command is a strong
+        // tampering signal (the vanilla client never does).
+        if (need === 'server') { if (this.anticheat) this.anticheat.signal('perm', c, this.code); return c.conn.send({ t: 'rej', q: m.q, reason: 'server-only' }); }
+        if (c.role === 'spectator') { if (this.anticheat) this.anticheat.signal('perm', c, this.code); return c.conn.send({ t: 'rej', q: m.q, reason: 'spectators cannot act' }); }
+        if (need === 'admin' && c.role !== 'admin' && c.role !== 'host') {
+          if (this.anticheat) this.anticheat.signal('perm', c, this.code);
           return c.conn.send({ t: 'rej', q: m.q, reason: 'admin only' });
+        }
         // rate limit
         const now = Date.now();
         c.cmdWindow = c.cmdWindow.filter((t) => now - t < 1000);
-        if (c.cmdWindow.length >= this.cfg.CMD_RATE_LIMIT) return c.conn.send({ t: 'rej', q: m.q, reason: 'rate limited' });
+        if (c.cmdWindow.length >= this.cfg.CMD_RATE_LIMIT) { if (this.anticheat) this.anticheat.signal('rate', c, this.code); return c.conn.send({ t: 'rej', q: m.q, reason: 'rate limited' }); }
         c.cmdWindow.push(now);
         // stamp identity server-side (clients cannot spoof issuer)
         const cmd = Object.assign({}, m.cmd, { _p: c.id, _q: m.q, _c: c });
@@ -257,6 +262,7 @@ class Room {
         if (this.serverHash && m.n === this.serverHash.tick && m.h !== this.serverHash.hash) {
           this.cfg.log.warn(`room ${this.code}: DIVERGENCE from ${c.name} @tick ${m.n} — resyncing`);
           if (this.metrics) this.metrics.recordDivergence();
+          if (this.anticheat) this.anticheat.signal('divergence', c, this.code);
           this.sendSnapshot(c, 'desync');
         }
         break;

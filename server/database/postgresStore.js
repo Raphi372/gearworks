@@ -290,6 +290,26 @@ function createPostgresStore(config, snapshots) {
       await prisma.report.update({ where: { id }, data: { status: status === 'resolved' ? 'RESOLVED' : 'DISMISSED' } }).catch(() => {});
       return { ok: true };
     },
+    // one flag row per account; latest reason/score/room win, count increments
+    async recordFlag(f) {
+      await prisma.flag.upsert({
+        where: { accountId: f.accountId },
+        create: { accountId: f.accountId, reason: f.reason || '', score: f.score | 0, roomCode: f.roomCode || null, count: 1 },
+        update: { reason: f.reason || '', score: f.score | 0, roomCode: f.roomCode || null, count: { increment: 1 } },
+      }).catch((e) => log.error(`pg flag failed for ${f.accountId}: ${e.message}`));
+      return { ok: true };
+    },
+    async listFlags() {
+      const rows = await prisma.flag.findMany({
+        orderBy: { updatedAt: 'desc' }, include: { account: { select: { username: true } } },
+      }).catch(() => []);
+      return rows.map((f) => ({ id: f.accountId, name: f.account ? f.account.username : null,
+        roomCode: f.roomCode, reason: f.reason, score: f.score, count: f.count, at: +f.updatedAt }));
+    },
+    async clearFlag(id) {
+      await prisma.flag.deleteMany({ where: { accountId: id } }).catch(() => {});
+      return { ok: true };
+    },
     async topFactories(limit, ownerIds) {
       const where = (ownerIds && ownerIds.length) ? { world: { ownerId: { in: ownerIds } } } : {};
       const rows = await prisma.factory.findMany({

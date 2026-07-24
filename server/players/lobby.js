@@ -223,16 +223,19 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
         case 'mod':
         case 'ban':
         case 'unban':
-        case 'reportResolve': {
+        case 'reportResolve':
+        case 'flagClear': {
           if (!account || !moderation || !moderation.isAdmin(account.username)) {
-            return conn.send({ t: 'mod', bans: null, reports: null, error: 'not authorized' });
+            return conn.send({ t: 'mod', bans: null, reports: null, flags: null, error: 'not authorized' });
           }
           let error = null;
           if (m.t === 'ban') error = (await moderation.ban(account.username, m.username, m.reason, m.days)).error || null;
           else if (m.t === 'unban') error = (await moderation.unban(account.username, m.username)).error || null;
           else if (m.t === 'reportResolve') error = (await moderation.resolveReport(account.username, m.id, m.action)).error || null;
-          const [bansRes, repRes] = await Promise.all([moderation.list(account.username), moderation.reports(account.username)]);
-          return conn.send({ t: 'mod', bans: bansRes.bans || [], reports: repRes.reports || [], error: error || null });
+          else if (m.t === 'flagClear') error = (await moderation.clearFlag(account.username, m.id)).error || null;
+          const [bansRes, repRes, flagRes] = await Promise.all([
+            moderation.list(account.username), moderation.reports(account.username), moderation.flags(account.username)]);
+          return conn.send({ t: 'mod', bans: bansRes.bans || [], reports: repRes.reports || [], flags: flagRes.flags || [], error: error || null });
         }
         /* ------------------------------ social ------------------------------ */
         case 'friends':

@@ -167,6 +167,10 @@ var Lobby = (function () {
       if (rd) { browserSess.sendReportResolve(rd.dataset.reportDismiss, 'dismissed'); return; }
       var rb = e.target.closest('[data-report-ban]');
       if (rb) { if (rb.dataset.reportBan) browserSess.sendBan(rb.dataset.reportBan, 'from report', 0); return; }
+      var fc = e.target.closest('[data-flag-clear]');
+      if (fc) { browserSess.sendFlagClear(fc.dataset.flagClear); return; }
+      var fb = e.target.closest('[data-flag-ban]');
+      if (fb) { if (fb.dataset.flagBan) browserSess.sendBan(fb.dataset.flagBan, 'anti-cheat flag', 0); return; }
       if (e.target.closest('#mod-ban')) {
         var u = (el('mod-user').value || '').trim();
         if (!u) { err('Enter a username to ban'); return; }
@@ -428,14 +432,24 @@ var Lobby = (function () {
     return eq;
   }
 
-  // admin-only moderation panel: a report queue (dismiss / ban), a ban form,
-  // and the list of active bans with an unban button. Shown only to admins.
-  function onMod(bans, reports, error) {
+  // admin-only moderation panel: anti-cheat flags, a report queue (dismiss /
+  // ban), a ban form, and the active bans with an unban button. Admins only.
+  function onMod(bans, reports, flags, error) {
     var host = el('lb-mod');
     if (!host) return;
     if (!account || !account.admin || bans === null) { host.innerHTML = ''; return; }
     var h = '<div class="divider"></div><b style="font-size:13px">🛡 Moderation</b>';
     if (error) h += '<div style="color:#ff7a7a;font-size:11px;margin:4px 0">' + esc(error) + '</div>';
+    // anti-cheat flags (score, don't auto-ban → a human triages)
+    h += '<div class="cos-slot">Anti-cheat flags</div>';
+    if (!flags || !flags.length) h += '<div class="acc-guest">No flags.</div>';
+    (flags || []).forEach(function (f) {
+      var meta = 'score ' + (f.score | 0) + (f.count > 1 ? ' • ×' + f.count : '') + (f.roomCode ? ' • ' + esc(f.roomCode) : '') + (f.reason ? ' • ' + esc(f.reason) : '');
+      h += '<div class="world-row"><div><div class="wn">' + esc(f.name || f.id) + '</div>' +
+        '<div class="wd">' + meta + '</div></div><div style="display:flex;gap:4px">' +
+        '<button class="btn gray" data-flag-ban="' + esc(f.name || '') + '" title="Ban this player">Ban</button>' +
+        '<button class="btn gray" data-flag-clear="' + esc(f.id) + '">Dismiss</button></div></div>';
+    });
     // open reports queue
     h += '<div class="cos-slot">Reports</div>';
     if (!reports || !reports.length) h += '<div class="acc-guest">No open reports.</div>';
@@ -641,7 +655,7 @@ var Lobby = (function () {
       stats: function (series) { onStats(series); },
       achievements: function (a) { onAchievements(a); },
       profile: function (p, mine) { onProfile(p, mine); },
-      mod: function (bans, reports, error) { onMod(bans, reports, error); },
+      mod: function (bans, reports, flags, error) { onMod(bans, reports, flags, error); },
       reported: function (m) { err(m && m.error ? m.error : 'Report submitted — thanks.'); },
       friends: function (mm) { onFriends(mm); },
       invites: function (list) { onInvites(list); },
