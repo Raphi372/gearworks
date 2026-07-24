@@ -54,7 +54,32 @@ function createModeration(config, store) {
     return { bans };
   }
 
-  return { isAdmin, check, ban, unban, list };
+  /* ---- player reports (any signed-in player files; admins triage) ---- */
+  async function report(reporterId, reporterUsername, targetUsername, reason) {
+    if (!reporterId) return { error: 'sign in to report' };
+    if (!store.createReport) return { error: 'reports unavailable' };
+    if (isAdmin(targetUsername)) return { error: 'that player cannot be reported' };   // admins are unreportable
+    const target = await store.getAccountByName(String(targetUsername || '').trim()).catch(() => null);
+    if (!target) return { error: 'no player with that name' };
+    if (target.id === reporterId) return { error: "you can't report yourself" };
+    await store.createReport({ reporterId, targetId: target.id, reason });
+    return { ok: true };
+  }
+
+  async function reports(byUsername) {
+    if (!isAdmin(byUsername)) return { error: 'not authorized' };
+    const list = store.listReports ? await store.listReports().catch(() => []) : [];
+    return { reports: list };
+  }
+
+  async function resolveReport(byUsername, id, action) {
+    if (!isAdmin(byUsername)) return { error: 'not authorized' };
+    if (!store.resolveReport) return { error: 'reports unavailable' };
+    await store.resolveReport(String(id || ''), action === 'resolved' ? 'resolved' : 'dismissed');
+    return { ok: true };
+  }
+
+  return { isAdmin, check, ban, unban, list, report, reports, resolveReport };
 }
 
 module.exports = { createModeration };

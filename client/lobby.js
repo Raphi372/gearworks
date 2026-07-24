@@ -143,6 +143,11 @@ var Lobby = (function () {
       if (!browserSess) return;
       if (e.target.closest('#pf-back')) { viewingProfile = null; browserSess.requestProfile(); return; }
       if (e.target.closest('#pf-bio-save')) { browserSess.sendSetProfile({ bio: (el('pf-bio').value || '') }); return; }
+      var rep = e.target.closest('#pf-report');
+      if (rep) {
+        var reason = (el('pf-report-reason') && el('pf-report-reason').value || '').trim();
+        browserSess.sendReport(rep.dataset.reportUser, reason); return;
+      }
       var c = e.target.closest('[data-cos-key]'); if (!c || c.classList.contains('locked')) return;
       var eq = equippedFromCatalog();
       // toggle: tapping the equipped one clears the slot, else it takes the slot
@@ -154,6 +159,10 @@ var Lobby = (function () {
       if (!browserSess) return;
       var un = e.target.closest('[data-unban]');
       if (un) { if (un.dataset.unban) browserSess.sendUnban(un.dataset.unban); return; }
+      var rd = e.target.closest('[data-report-dismiss]');
+      if (rd) { browserSess.sendReportResolve(rd.dataset.reportDismiss, 'dismissed'); return; }
+      var rb = e.target.closest('[data-report-ban]');
+      if (rb) { if (rb.dataset.reportBan) browserSess.sendBan(rb.dataset.reportBan, 'from report', 0); return; }
       if (e.target.closest('#mod-ban')) {
         var u = (el('mod-user').value || '').trim();
         if (!u) { err('Enter a username to ban'); return; }
@@ -375,7 +384,10 @@ var Lobby = (function () {
         nameTag('@' + m.username, m.loadout) + '<button class="btn gray" id="pf-back">← My locker</button></div>' +
         '<div style="font-size:11px;color:#8aa;margin:4px 0">Level ' + (m.level | 0) + '</div>' +
         (m.bio ? '<div style="font-size:12px;color:#cdd9e5">' + esc(m.bio) + '</div>'
-               : '<div class="acc-guest">No bio yet.</div>');
+               : '<div class="acc-guest">No bio yet.</div>') +
+        '<div style="display:flex;gap:6px;margin-top:8px">' +
+        '<input class="txt" id="pf-report-reason" placeholder="report reason" style="flex:1;margin:0" maxlength="300">' +
+        '<button class="btn gray" id="pf-report" data-report-user="' + esc(m.username) + '">Report</button></div>';
       return;
     }
     viewingProfile = null;
@@ -412,19 +424,33 @@ var Lobby = (function () {
     return eq;
   }
 
-  // admin-only moderation panel: ban by username (optional reason/days) + the
-  // list of active bans with an unban button. Shown only to admins.
-  function onMod(bans, error) {
+  // admin-only moderation panel: a report queue (dismiss / ban), a ban form,
+  // and the list of active bans with an unban button. Shown only to admins.
+  function onMod(bans, reports, error) {
     var host = el('lb-mod');
     if (!host) return;
     if (!account || !account.admin || bans === null) { host.innerHTML = ''; return; }
-    var h = '<div class="divider"></div><b style="font-size:13px">🛡 Moderation</b>' +
-      '<div style="display:flex;gap:6px;margin:6px 0">' +
+    var h = '<div class="divider"></div><b style="font-size:13px">🛡 Moderation</b>';
+    if (error) h += '<div style="color:#ff7a7a;font-size:11px;margin:4px 0">' + esc(error) + '</div>';
+    // open reports queue
+    h += '<div class="cos-slot">Reports</div>';
+    if (!reports || !reports.length) h += '<div class="acc-guest">No open reports.</div>';
+    (reports || []).forEach(function (r) {
+      h += '<div class="world-row"><div><div class="wn">' + esc(r.target || r.targetId) + '</div>' +
+        '<div class="wd">“' + esc(r.reason || 'no reason') + '” • by ' + esc(r.reporter || '?') + '</div></div>' +
+        '<div style="display:flex;gap:4px">' +
+        '<button class="btn gray" data-report-ban="' + esc(r.target || '') + '" title="Ban this player">Ban</button>' +
+        '<button class="btn gray" data-report-dismiss="' + esc(r.id) + '">Dismiss</button></div></div>';
+    });
+    // ban form
+    h += '<div class="cos-slot">Ban a player</div>' +
+      '<div style="display:flex;gap:6px;margin-bottom:4px">' +
       '<input class="txt" id="mod-user" placeholder="username" style="flex:1;margin:0" maxlength="20">' +
       '<input class="txt" id="mod-days" placeholder="days" style="width:52px;margin:0" maxlength="4" inputmode="numeric">' +
       '<button class="btn gray" id="mod-ban">Ban</button></div>' +
       '<input class="txt" id="mod-reason" placeholder="reason (optional)" style="width:100%;margin:0 0 4px" maxlength="200">';
-    if (error) h += '<div style="color:#ff7a7a;font-size:11px;margin-bottom:4px">' + esc(error) + '</div>';
+    // active bans
+    h += '<div class="cos-slot">Active bans</div>';
     if (!bans.length) h += '<div class="acc-guest">No active bans.</div>';
     bans.forEach(function (b) {
       var when = b.until ? 'until ' + new Date(b.until).toISOString().slice(0, 10) : 'permanent';
@@ -610,7 +636,8 @@ var Lobby = (function () {
       stats: function (series) { onStats(series); },
       achievements: function (a) { onAchievements(a); },
       profile: function (p, mine) { onProfile(p, mine); },
-      mod: function (bans, error) { onMod(bans, error); },
+      mod: function (bans, reports, error) { onMod(bans, reports, error); },
+      reported: function (m) { err(m && m.error ? m.error : 'Report submitted — thanks.'); },
       friends: function (mm) { onFriends(mm); },
       invites: function (list) { onInvites(list); },
       invited: function (mm) { if (mm && mm.error) err(mm.error); else if (browserSess) browserSess.requestInvites(); },

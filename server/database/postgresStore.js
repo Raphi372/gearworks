@@ -268,6 +268,28 @@ function createPostgresStore(config, snapshots) {
       return rows.map((b) => ({ id: b.accountId, username: b.account ? b.account.username : null,
         reason: b.reason, by: b.by, at: +b.createdAt, until: b.until ? +b.until : 0 }));
     },
+    // one report per (reporter, target): re-reporting reopens/updates the row
+    async createReport(r) {
+      const reason = String(r.reason || '').slice(0, 300);
+      await prisma.report.upsert({
+        where: { reporterId_targetId: { reporterId: r.reporterId, targetId: r.targetId } },
+        create: { reporterId: r.reporterId, targetId: r.targetId, reason, status: 'OPEN' },
+        update: { reason, status: 'OPEN', createdAt: new Date() },
+      }).catch((e) => log.error(`pg report failed: ${e.message}`));
+      return { ok: true };
+    },
+    async listReports() {
+      const rows = await prisma.report.findMany({
+        where: { status: 'OPEN' }, orderBy: { createdAt: 'desc' },
+        include: { reporter: { select: { username: true } }, target: { select: { username: true } } },
+      }).catch(() => []);
+      return rows.map((r) => ({ id: r.id, reporterId: r.reporterId, reporter: r.reporter ? r.reporter.username : null,
+        targetId: r.targetId, target: r.target ? r.target.username : null, reason: r.reason, at: +r.createdAt }));
+    },
+    async resolveReport(id, status) {
+      await prisma.report.update({ where: { id }, data: { status: status === 'resolved' ? 'RESOLVED' : 'DISMISSED' } }).catch(() => {});
+      return { ok: true };
+    },
     async topFactories(limit, ownerIds) {
       const where = (ownerIds && ownerIds.length) ? { world: { ownerId: { in: ownerIds } } } : {};
       const rows = await prisma.factory.findMany({

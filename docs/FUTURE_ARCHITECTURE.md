@@ -661,6 +661,17 @@ global-identity features (moderation, anti-cheat depth).
 > moderation panel only to admins. Proven by an end-to-end test (ban blocks
 > login + kills the session; unban restores it; non-admins refused; an admin
 > can't be banned) + a store-level ban-expiry unit, and browser-verified.
+>
+> - **Slice 2 (player reports):** `Report` (schema + migration `0010`, both
+>   backends) with a one-open-report-per-(reporter, target) lifecycle — any
+>   signed-in player files a report (`report`, admin usernames unreportable, no
+>   self-report), admins triage a queue and resolve/dismiss (`reportResolve`),
+>   and can ban straight from a report. The lobby `mod` payload now carries the
+>   open-reports queue alongside the bans; a "Report" control on a player's
+>   public profile card files it, and the admin panel renders the queue with
+>   Ban/Dismiss. Proven by an end-to-end test (file → admin queue → dismiss;
+>   dedup; non-admin can file but not triage; no self/admin reports) and
+>   browser-verified end to end.
 
 **Files affected**
 - Infra: per-region deploy config (regions, endpoints), regional Prometheus scrape.
