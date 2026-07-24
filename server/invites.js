@@ -4,9 +4,9 @@
 
    An invite is short-lived and disposable (a friend asks another to join a
    specific world), so — like presence — it stays OUT of the relational store:
-   'local' (in-memory, single-instance default) or 'file' (a small file per
-   invite in a shared dir, so a friend on another instance still sees it). Each
-   invite carries an expiry; stale invites are ignored and swept.
+   'local' (in-memory, single-instance default), 'file' (a small file per invite
+   in a shared dir), or 'redis' (a shared write-through cache — the scale option).
+   Each invite carries an expiry; stale invites are ignored and swept.
 
    The invite only routes the recipient to a world code — the actual join still
    goes through the connect-token handoff and the room's own access checks, so an
@@ -15,6 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { createRedisCache } = require('./redisCache');
 
 function memoryBackend() {
   const m = new Map();
@@ -36,11 +37,13 @@ function fileBackend(dir, log) {
 }
 
 function createInvites(config) {
-  const mode = config.INVITES === 'file' ? 'file' : 'local';
+  const mode = ['file', 'redis'].includes(config.INVITES) ? config.INVITES : 'local';
   const TTL = config.INVITE_TTL_MS | 0 || 3600000;
   const dir = config.INVITE_DIR || path.join(config.SAVE_DIR || 'saves', 'invites');
-  const backend = mode === 'file' ? fileBackend(dir, config.log) : memoryBackend();
+  const backend = mode === 'redis' ? createRedisCache(config, { prefix: 'gw:invite:', ttlMs: TTL, refreshMs: config.INVITE_REFRESH_MS })
+    : mode === 'file' ? fileBackend(dir, config.log) : memoryBackend();
   const fresh = (v) => !!v && (v.exp || 0) > Date.now();
+  if (mode === 'redis') config.log('invites: redis backend (shared cache)');
 
   return {
     mode,
@@ -62,6 +65,8 @@ function createInvites(config) {
       }
       return out.sort((a, b) => b.createdAt - a.createdAt);
     },
+    refresh() { return backend.refresh ? backend.refresh() : Promise.resolve(); },
+    close() { if (backend.close) backend.close(); },
   };
 }
 

@@ -127,6 +127,7 @@ async function main() {
     registry.destroyAll('shutdown');     // each room writes a final save (and deregisters its route via onClose)
     try { await store.flush(); await store.close(); } catch (e) { log.error(`store close: ${e.message}`); }
     if (presence.close) presence.close();   // release the redis socket/timer (no-op for local/file)
+    if (invites.close) invites.close();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();   // hard cap
   }

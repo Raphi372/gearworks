@@ -33,6 +33,8 @@ All via environment variables (12-factor). Defaults in parentheses.
 | `PRESENCE` | `local` | friend presence store: `local` (single instance), `file` (shared dir), or `redis` (shared cache) |
 | `REDIS_URL` | — | Redis endpoint for the shared ephemeral cache when `PRESENCE=redis` (e.g. `redis://:pass@host:6379`) |
 | `PRESENCE_REFRESH_MS` | `5000` | `PRESENCE=redis`: how often each instance refreshes the cluster presence cache |
+| `INVITES` | `local` | world-invite store: `local`, `file` (shared dir), or `redis` (shared cache, uses `REDIS_URL`) |
+| `INVITE_REFRESH_MS` | `5000` | `INVITES=redis`: how often each instance refreshes the cluster invite cache |
 | `PRESENCE_DIR` | `<SAVE_DIR>/presence` | presence files when `PRESENCE=file` |
 | `PRESENCE_TTL_MS` | `60000` | presence goes stale (→ offline) after this |
 | `INVITES` | `local` | world-invite store: `local` (single instance) or `file` (shared dir) |

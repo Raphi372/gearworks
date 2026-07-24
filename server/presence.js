@@ -23,42 +23,16 @@
    ========================================================================== */
 const fs = require('fs');
 const path = require('path');
-const { createRedis } = require('./redis');
+const { createRedisCache } = require('./redisCache');
 
 function memoryBackend() {
   const m = new Map();
   return { put: (id, v) => m.set(id, v), get: (id) => m.get(id) || null, del: (id) => m.delete(id) };
 }
-// shared cache backend: sync reads/writes hit a local mirror; writes replicate
-// to Redis (with a TTL) and a periodic refresh repopulates the mirror from the
-// whole cluster, keeping the synchronous contract while scaling across instances.
-function redisBackend(config, log) {
-  const redis = createRedis(config.REDIS_URL, log);
-  const prefix = 'gw:presence:';
-  const key = (id) => prefix + encodeURIComponent(id);
-  const ttl = config.PRESENCE_TTL_MS | 0 || 60000;
-  const cache = new Map();
-  async function refresh() {
-    const keys = await redis.keys(prefix + '*').catch(() => null);
-    if (!keys) return;                       // unreachable: keep the last snapshot
-    const next = new Map();
-    if (keys.length) {
-      const vals = await redis.mget(keys).catch(() => []);
-      keys.forEach((k, i) => { try { if (vals[i]) next.set(decodeURIComponent(k.slice(prefix.length)), JSON.parse(vals[i])); } catch (e) { /* skip */ } });
-    }
-    cache.clear();
-    for (const [k, v] of next) cache.set(k, v);
-  }
-  const timer = setInterval(() => { refresh(); }, config.PRESENCE_REFRESH_MS | 0 || 5000);
-  timer.unref();
-  refresh();
-  return {
-    put(id, v) { cache.set(id, v); redis.set(key(id), JSON.stringify(v), ttl).catch(() => {}); },
-    get(id) { return cache.get(id) || null; },
-    del(id) { cache.delete(id); redis.del(key(id)).catch(() => {}); },
-    refresh,                                 // exposed for deterministic tests
-    close() { clearInterval(timer); redis.close(); },
-  };
+// shared cache backend: the write-through Redis mirror (see server/redisCache.js)
+// keeps the synchronous contract while sharing presence across instances.
+function redisBackend(config) {
+  return createRedisCache(config, { prefix: 'gw:presence:', ttlMs: config.PRESENCE_TTL_MS, refreshMs: config.PRESENCE_REFRESH_MS });
 }
 function fileBackend(dir, log) {
   try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { /* lazy */ }
@@ -75,7 +49,7 @@ function createPresence(config) {
   const TTL = config.PRESENCE_TTL_MS | 0 || 60000;
   const region = config.REGION;
   const dir = config.PRESENCE_DIR || path.join(config.SAVE_DIR || 'saves', 'presence');
-  const backend = mode === 'redis' ? redisBackend(config, config.log)
+  const backend = mode === 'redis' ? redisBackend(config)
     : mode === 'file' ? fileBackend(dir, config.log) : memoryBackend();
   const fresh = (p) => !!p && (Date.now() - (p.updatedAt || 0) < TTL);
   if (mode === 'redis') config.log('presence: redis backend (shared cache)');
