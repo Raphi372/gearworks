@@ -34,6 +34,7 @@ const { createMetrics } = require('./metrics');
 const { createDirectory } = require('./world/directory');
 const { createPresence } = require('./presence');
 const { createInvites } = require('./invites');
+const { createModeration } = require('./moderation');
 
 const log = config.log;
 const monitor = createMonitoring(config);
@@ -55,8 +56,9 @@ async function main() {
   const invites = createInvites(config);       // pending world invites
   registry = createRegistry(config, store, tokens, metrics, directory, presence);
   const auth = createAuth(config, store, mailer, tokens);
+  const moderation = createModeration(config, store);   // account bans (admins via ADMIN_USERS)
   const stats = createStatSampler(config, registry, store);
-  const handleConn = createLobby(config, registry, auth, store, tokens, metrics, directory, presence, invites);
+  const handleConn = createLobby(config, registry, auth, store, tokens, metrics, directory, presence, invites, moderation);
 
   // control channel: code → { owning instance URL, signed connect token }. The
   // connect token binds the (optional) account to this room; the owning

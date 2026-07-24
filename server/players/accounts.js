@@ -121,6 +121,8 @@ function createAuth(config, store, mailer, tokens) {
     const ok = acct && !acct.guest && verifyPassword(password, acct.passwordHash);
     if (!ok) { recordAttempt(key); return { error: 'invalid credentials' }; }
     attempts.delete(key);
+    const ban = store.getBan ? await store.getBan(acct.id).catch(() => null) : null;
+    if (ban) return { error: banMessage(ban), banned: true };
     return { account: publicAcct(acct), token: sessionToken(acct) };
   }
 
@@ -143,6 +145,7 @@ function createAuth(config, store, mailer, tokens) {
     if (!d) return null;
     const acct = await store.getAccount(d.aid);
     if (!acct || (acct.tokenVersion || 0) !== d.sv) return null;   // stale version → session invalidated
+    if (store.getBan && await store.getBan(acct.id).catch(() => null)) return null;   // banned → treated as signed out
     return publicAcct(acct);
   }
 
@@ -212,6 +215,10 @@ function createAuth(config, store, mailer, tokens) {
   }
 
   function publicAcct(a) { return { id: a.id, username: a.username, color: a.color, guest: !!a.guest, email: a.email || null, emailVerified: !!a.emailVerified }; }
+  function banMessage(ban) {
+    const base = ban.reason ? `banned: ${ban.reason}` : 'this account is banned';
+    return ban.until ? `${base} (until ${new Date(ban.until).toISOString().slice(0, 10)})` : base;
+  }
 
   return { register, login, guest, fromToken, publicAcct, invalidateSessions,
     requestReset, resetPassword, setEmail, verifyEmail };

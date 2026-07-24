@@ -240,6 +240,34 @@ function createPostgresStore(config, snapshots) {
         .catch((e) => log.error(`pg profile save failed for ${id}: ${e.message}`));
       return this.getProfile(id);
     },
+    /* ---- moderation: account bans ---- */
+    async banAccount(id, ban) {
+      const until = ban.until ? new Date(ban.until) : null;
+      await prisma.ban.upsert({
+        where: { accountId: id },
+        create: { accountId: id, reason: ban.reason || '', by: ban.by || '', until },
+        update: { reason: ban.reason || '', by: ban.by || '', until },
+      }).catch((e) => log.error(`pg ban failed for ${id}: ${e.message}`));
+      return { ok: true };
+    },
+    async unbanAccount(id) {
+      await prisma.ban.deleteMany({ where: { accountId: id } }).catch(() => {});
+      return { ok: true };
+    },
+    async getBan(id) {
+      const b = await prisma.ban.findUnique({ where: { accountId: id } }).catch(() => null);
+      if (!b) return null;
+      if (b.until && +b.until <= Date.now()) { await this.unbanAccount(id); return null; }   // lapsed
+      return { reason: b.reason, by: b.by, at: +b.createdAt, until: b.until ? +b.until : 0 };
+    },
+    async listBans() {
+      const rows = await prisma.ban.findMany({
+        where: { OR: [{ until: null }, { until: { gt: new Date() } }] },
+        include: { account: { select: { username: true } } }, orderBy: { createdAt: 'desc' },
+      }).catch(() => []);
+      return rows.map((b) => ({ id: b.accountId, username: b.account ? b.account.username : null,
+        reason: b.reason, by: b.by, at: +b.createdAt, until: b.until ? +b.until : 0 }));
+    },
     async topFactories(limit, ownerIds) {
       const where = (ownerIds && ownerIds.length) ? { world: { ownerId: { in: ownerIds } } } : {};
       const rows = await prisma.factory.findMany({

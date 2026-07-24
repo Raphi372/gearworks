@@ -649,6 +649,19 @@ achievements, leaderboards, presence, and quickplay matchmaking.
 **Goal:** multi-region fleets, replica/object-storage/Redis data scaling, and the
 global-identity features (moderation, anti-cheat depth).
 
+> **Status — Slice 1 landed (account bans).** `server/moderation.js` — an admin
+> (listed in `ADMIN_USERS`, empty by default so the $0 deploy has none) can ban
+> an account by username, optionally for N days, or lift a ban. Bans persist
+> through the store (`bans.json` on the file backend; a new `Ban` table +
+> migration `0009` on Postgres) and are **enforced server-side** at `login` and
+> session resume (`accounts.js`) — the client is never trusted to know it's
+> banned; issuing a ban bumps the target's `tokenVersion`, so any live session
+> dies immediately. Lobby `mod`/`ban`/`unban` are admin-gated; the account
+> payload carries a (never-trusted) `admin` flag so the client shows a
+> moderation panel only to admins. Proven by an end-to-end test (ban blocks
+> login + kills the session; unban restores it; non-admins refused; an admin
+> can't be banned) + a store-level ban-expiry unit, and browser-verified.
+
 **Files affected**
 - Infra: per-region deploy config (regions, endpoints), regional Prometheus scrape.
 - `server/database/*`: read-replica routing (read vs authz reads — [DB-9]); optional

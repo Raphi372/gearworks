@@ -65,6 +65,11 @@ Defined in `prisma/schema.prisma`:
   `profiles.json`. Served over the lobby via `profile` (own locker, or another
   player's public card) / `setProfile` (equip requests are sanitized against
   derived ownership, so an untrusted client can only wear what it's earned).
+- **Ban** — a moderation hold on an account (Phase 3), 1:1 with an account:
+  `reason`, `by` (admin username), and `until` (null = permanent). Enforced
+  **server-side** at login and session resume; the file backend keeps the same
+  in `bans.json`. Admins are configured by `ADMIN_USERS` (comma-separated
+  usernames), and served over the lobby via admin-gated `mod` / `ban` / `unban`.
 - **Stat** — time-series counters, one row per `(account, key, recordedAt)`.
   A periodic sampler (`server/stats.js`, every `STAT_SAMPLE_MIN` minutes;
   `0` disables it) records one point per metric — `net_worth`, `entities`,

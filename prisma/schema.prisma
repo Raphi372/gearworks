@@ -34,11 +34,25 @@ model Account {
   memberships  WorldMember[]
   progression  Progression?
   profile      Profile?
+  ban          Ban?
   stats        Stat[]
   friendsFrom  Friendship[] @relation("FriendFrom")
   friendsTo    Friendship[] @relation("FriendTo")
 
   @@index([lastSeenAt])
+}
+
+// ---- Ban: a moderation hold on an account, 1:1 with Account ----------------
+// `until` null = permanent; a lapsed ban is treated as inactive. Enforced at
+// login and session resume (server-side); admins are set via ADMIN_USERS.
+model Ban {
+  id        String    @id @default(cuid())
+  accountId String    @unique
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  reason    String    @default("")
+  by        String    @default("")          // admin username who issued it
+  until     DateTime?                        // null = permanent
+  createdAt DateTime  @default(now())
 }
 
 // ---- Profile: vanity layer (bio + equipped cosmetics), 1:1 with Account -----
