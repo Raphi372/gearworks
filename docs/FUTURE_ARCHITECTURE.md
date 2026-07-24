@@ -703,7 +703,12 @@ global-identity features (moderation, anti-cheat depth).
 >   `ADMIN_USERS` means no one sees it). Proven by a scorer unit test
 >   (accumulate/threshold/cooldown/decay/anon-ignored/disabled) + an integration
 >   test (a command-spamming client is flagged in a live room and an admin sees +
->   dismisses it), and browser-verified.
+>   dismisses it), and browser-verified. **Increment:** each flag now captures a
+>   bounded rolling window of the player's recent input attempts (type + tick,
+>   `ANTICHEAT_REPLAY_WINDOW`) — a lightweight **replay** ([SEC-3]) stored with the
+>   flag (`Flag.replay`, migration `0013`) and shown in the admin panel as a
+>   cadence summary (`N inputs · place×31 · remove×9 @t…`), so a human can judge
+>   the pattern before acting.
 >
 > - **Slice 5 (object-storage snapshots):** the `s3` backend for
 >   `snapshotStore` — a **zero-dependency SigV4** PUT/GET/DELETE over Node's

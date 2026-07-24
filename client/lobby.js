@@ -439,6 +439,18 @@ var Lobby = (function () {
     return eq;
   }
 
+  // compact summary of a captured input window: "N inputs · place×31 · remove×9"
+  // plus the tick span, so an admin can eyeball the cadence/pattern of a flag.
+  function replaySummary(replay) {
+    if (!replay || !replay.length) return '';
+    var by = {}; replay.forEach(function (r) { var t = r && r.t || '?'; by[t] = (by[t] || 0) + 1; });
+    var top = Object.keys(by).sort(function (a, b) { return by[b] - by[a]; }).slice(0, 3)
+      .map(function (t) { return esc(t) + '×' + by[t]; }).join(' · ');
+    var t0 = replay[0].tick | 0, t1 = replay[replay.length - 1].tick | 0;
+    var span = t1 > t0 ? ' @t' + t0 + '–' + t1 : '';
+    return replay.length + ' inputs · ' + top + span;
+  }
+
   // admin-only moderation panel: anti-cheat flags, a report queue (dismiss /
   // ban), a ban form, and the active bans with an unban button. Admins only.
   function onMod(bans, reports, flags, error) {
@@ -452,8 +464,9 @@ var Lobby = (function () {
     if (!flags || !flags.length) h += '<div class="acc-guest">No flags.</div>';
     (flags || []).forEach(function (f) {
       var meta = 'score ' + (f.score | 0) + (f.count > 1 ? ' • ×' + f.count : '') + (f.roomCode ? ' • ' + esc(f.roomCode) : '') + (f.reason ? ' • ' + esc(f.reason) : '');
+      var replay = replaySummary(f.replay);
       h += '<div class="world-row"><div><div class="wn">' + esc(f.name || f.id) + '</div>' +
-        '<div class="wd">' + meta + '</div></div><div style="display:flex;gap:4px">' +
+        '<div class="wd">' + meta + (replay ? '<br><span style="color:#8aa">⏺ ' + replay + '</span>' : '') + '</div></div><div style="display:flex;gap:4px">' +
         '<button class="btn gray" data-flag-ban="' + esc(f.name || '') + '" title="Ban this player">Ban</button>' +
         '<button class="btn gray" data-flag-clear="' + esc(f.id) + '">Dismiss</button></div></div>';
     });

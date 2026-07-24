@@ -135,6 +135,7 @@ const config = {
   ANTICHEAT_FLAG_SCORE: envInt('ANTICHEAT_FLAG_SCORE', 60),
   ANTICHEAT_DECAY_MS: envInt('ANTICHEAT_DECAY_MS', 15000),
   ANTICHEAT_COOLDOWN_MS: envInt('ANTICHEAT_COOLDOWN_MS', 60000),
+  ANTICHEAT_REPLAY_WINDOW: envInt('ANTICHEAT_REPLAY_WINDOW', 40),   // recent inputs captured with a flag for admin review
 
   // account recovery (password reset / email verification)
   RESET_TTL_MIN: envInt('RESET_TTL_MIN', 45),      // reset/verify token lifetime

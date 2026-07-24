@@ -85,6 +85,9 @@ test('a command-spamming client is flagged in a live room and an admin sees it',
     const flag = mod.flags.find((f) => f.name === pname);
     assert.ok(flag, 'the spamming player was flagged');
     assert.ok(flag.score >= 20, 'the flag records the score reached');
+    // the flag captured the recent-input replay window ([SEC-3])
+    assert.ok(Array.isArray(flag.replay) && flag.replay.length, 'the flag carries a replay window');
+    assert.ok(flag.replay.every((r) => r.t === 'noop' && typeof r.tick === 'number'), 'replay entries are input type + tick');
 
     // an admin can dismiss the flag
     a.send({ t: 'flagClear', id: flag.id });

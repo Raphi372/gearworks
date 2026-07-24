@@ -51,7 +51,9 @@ function createAntiCheat(config, store, metrics) {
       s.flaggedAt = now;
       s.score = 0;   // reset after flagging so the cooldown governs the next one
       if (metrics && metrics.recordFlag) metrics.recordFlag();
-      Promise.resolve(store.recordFlag({ accountId: c.aid, name: s.name, roomCode: roomCode || null, reason: kind, score: reached })).catch(() => {});
+      // snapshot the client's recent input window for admin review ([SEC-3])
+      const replay = Array.isArray(c.cmdLog) ? c.cmdLog.slice() : [];
+      Promise.resolve(store.recordFlag({ accountId: c.aid, name: s.name, roomCode: roomCode || null, reason: kind, score: reached, replay })).catch(() => {});
     }
   }
 

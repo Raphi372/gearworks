@@ -360,7 +360,8 @@ function createFileStore(config, snapshots) {
     const all = loadFlags();
     const cur = all[f.accountId] || { count: 0, at: 0 };
     all[f.accountId] = { name: f.name || cur.name || null, roomCode: f.roomCode || null,
-      reason: f.reason || '', score: f.score | 0, count: (cur.count | 0) + 1, at: Date.now() };
+      reason: f.reason || '', score: f.score | 0, count: (cur.count | 0) + 1, at: Date.now(),
+      replay: Array.isArray(f.replay) ? f.replay : (cur.replay || []) };   // most-recent input window
     persistFlags(); return { ok: true };
   }
   function listFlags() {
@@ -368,7 +369,7 @@ function createFileStore(config, snapshots) {
     for (const id of Object.keys(all)) {
       const f = all[id];
       out.push({ id, name: f.name || (accts.byId[id] ? accts.byId[id].username : null),
-        roomCode: f.roomCode, reason: f.reason, score: f.score, count: f.count, at: f.at });
+        roomCode: f.roomCode, reason: f.reason, score: f.score, count: f.count, at: f.at, replay: f.replay || [] });
     }
     return out.sort((x, y) => y.at - x.at);
   }
