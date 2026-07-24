@@ -9,6 +9,7 @@
    ========================================================================== */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const Progression = require('../../shared/progression.js');
 
 function createFileStore(config, snapshots) {
@@ -304,6 +305,44 @@ function createFileStore(config, snapshots) {
     return out.sort((x, y) => y.at - x.at);
   }
 
+  /* -------- moderation: player reports (JSON on disk) -------- */
+  const reportsPath = path.join(SAVE_DIR, 'reports.json');
+  let reports = null;
+  function loadReports() {
+    if (reports) return reports;
+    try { reports = JSON.parse(fs.readFileSync(reportsPath, 'utf8')); } catch (e) { reports = {}; }
+    if (!reports || typeof reports !== 'object') reports = {};
+    return reports;
+  }
+  function persistReports() {
+    try { fs.writeFileSync(reportsPath, JSON.stringify(loadReports())); }
+    catch (e) { log.error(`reports save failed: ${e.message}`); }
+  }
+  // one report per (reporter, target): re-reporting reopens/updates the same row
+  function createReport(r) {
+    const all = loadReports();
+    let id = Object.keys(all).find((k) => all[k].reporterId === r.reporterId && all[k].targetId === r.targetId);
+    if (!id) id = crypto.randomBytes(12).toString('hex');
+    all[id] = { reporterId: r.reporterId, targetId: r.targetId, reason: String(r.reason || '').slice(0, 300), status: 'open', at: Date.now() };
+    persistReports(); return { ok: true, id };
+  }
+  function listReports() {
+    const all = loadReports(); const accts = loadAccounts(); const out = [];
+    const uname = (id) => (accts.byId[id] ? accts.byId[id].username : null);
+    for (const id of Object.keys(all)) {
+      const r = all[id];
+      if (r.status !== 'open') continue;
+      out.push({ id, reporterId: r.reporterId, reporter: uname(r.reporterId),
+        targetId: r.targetId, target: uname(r.targetId), reason: r.reason, at: r.at });
+    }
+    return out.sort((x, y) => y.at - x.at);
+  }
+  function resolveReport(id, status) {
+    const all = loadReports();
+    if (all[id]) { all[id].status = status === 'resolved' ? 'resolved' : 'dismissed'; persistReports(); }
+    return { ok: true };
+  }
+
   return {
     kind: 'file',
     accountsEnabled: true,
@@ -329,6 +368,9 @@ function createFileStore(config, snapshots) {
     unbanAccount: (id) => Promise.resolve(unbanAccount(id)),
     getBan: (id) => Promise.resolve(getBan(id)),
     listBans: () => Promise.resolve(listBans()),
+    createReport: (r) => Promise.resolve(createReport(r)),
+    listReports: () => Promise.resolve(listReports()),
+    resolveReport: (id, status) => Promise.resolve(resolveReport(id, status)),
     topFactories: (limit, ownerIds) => Promise.resolve(topFactories(limit || 20, ownerIds)),
     recentRooms: (sinceMs) => Promise.resolve(recentRooms(sinceMs)),
     flush: () => Promise.resolve(),

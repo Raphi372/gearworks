@@ -38,8 +38,33 @@ model Account {
   stats        Stat[]
   friendsFrom  Friendship[] @relation("FriendFrom")
   friendsTo    Friendship[] @relation("FriendTo")
+  reportsMade    Report[]   @relation("ReportsMade")
+  reportsAgainst Report[]   @relation("ReportsAgainst")
 
   @@index([lastSeenAt])
+}
+
+// ---- Report: a player flags another account for admin review (Phase 3) ------
+// One open report per (reporter, target); an admin resolves or dismisses it,
+// optionally issuing a Ban. Enforcement/visibility is admin-gated server-side.
+model Report {
+  id         String       @id @default(cuid())
+  reporterId String
+  reporter   Account      @relation("ReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetId   String
+  target     Account      @relation("ReportsAgainst", fields: [targetId], references: [id], onDelete: Cascade)
+  reason     String       @default("")
+  status     ReportStatus @default(OPEN)
+  createdAt  DateTime     @default(now())
+
+  @@unique([reporterId, targetId])
+  @@index([status])
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
 }
 
 // ---- Ban: a moderation hold on an account, 1:1 with Account ----------------

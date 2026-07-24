@@ -211,20 +211,28 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
           } });
         }
         /* ---------------------------- moderation ---------------------------- */
-        // Admin-only (ADMIN_USERS). Bans are enforced server-side at login /
+        // Any signed-in player can file a report; the ban tools + report queue
+        // are admin-only (ADMIN_USERS). Bans are enforced server-side at login /
         // session resume; issuing one bumps the target's tokenVersion so any
         // live session dies immediately.
+        case 'report': {   // flag another player for admin review
+          if (!account || !moderation) return conn.send({ t: 'reported', error: 'sign in to report' });
+          const r = await moderation.report(account.id, account.username, m.username, m.reason);
+          return conn.send({ t: 'reported', ok: !r.error, error: r.error || null });
+        }
         case 'mod':
         case 'ban':
-        case 'unban': {
+        case 'unban':
+        case 'reportResolve': {
           if (!account || !moderation || !moderation.isAdmin(account.username)) {
-            return conn.send({ t: 'mod', bans: null, error: 'not authorized' });
+            return conn.send({ t: 'mod', bans: null, reports: null, error: 'not authorized' });
           }
           let error = null;
           if (m.t === 'ban') error = (await moderation.ban(account.username, m.username, m.reason, m.days)).error || null;
           else if (m.t === 'unban') error = (await moderation.unban(account.username, m.username)).error || null;
-          const res = await moderation.list(account.username);
-          return conn.send({ t: 'mod', bans: res.bans || [], error: error || res.error || null });
+          else if (m.t === 'reportResolve') error = (await moderation.resolveReport(account.username, m.id, m.action)).error || null;
+          const [bansRes, repRes] = await Promise.all([moderation.list(account.username), moderation.reports(account.username)]);
+          return conn.send({ t: 'mod', bans: bansRes.bans || [], reports: repRes.reports || [], error: error || null });
         }
         /* ------------------------------ social ------------------------------ */
         case 'friends':

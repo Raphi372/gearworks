@@ -70,6 +70,11 @@ Defined in `prisma/schema.prisma`:
   **server-side** at login and session resume; the file backend keeps the same
   in `bans.json`. Admins are configured by `ADMIN_USERS` (comma-separated
   usernames), and served over the lobby via admin-gated `mod` / `ban` / `unban`.
+- **Report** — a player flags another account for review (Phase 3). One OPEN
+  report per `@@unique([reporterId, targetId])` (re-reporting updates it); an
+  admin resolves or dismisses (`ReportStatus`), optionally issuing a `Ban`. Any
+  signed-in player files one (`report`); the queue + triage are admin-gated
+  (`reportResolve`). The file backend keeps the same in `reports.json`.
 - **Stat** — time-series counters, one row per `(account, key, recordedAt)`.
   A periodic sampler (`server/stats.js`, every `STAT_SAMPLE_MIN` minutes;
   `0` disables it) records one point per metric — `net_worth`, `entities`,
