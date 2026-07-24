@@ -245,6 +245,32 @@ function createFileStore(config, snapshots) {
     persistFriends(); return { ok: true };
   }
 
+  /* -------- profiles: bio + equipped cosmetic loadout (JSON on disk) -------- */
+  // Only the equipped loadout + bio are stored; cosmetic OWNERSHIP is derived
+  // from progression (see shared/cosmetics.js), never persisted here.
+  const profilesPath = path.join(SAVE_DIR, 'profiles.json');
+  let profiles = null;
+  function loadProfiles() {
+    if (profiles) return profiles;
+    try { profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8')); } catch (e) { profiles = {}; }
+    if (!profiles || typeof profiles !== 'object') profiles = {};
+    return profiles;
+  }
+  function getProfile(id) {
+    const p = loadProfiles()[id];
+    return { bio: (p && p.bio) || '', equipped: (p && p.equipped) || {} };
+  }
+  function setProfile(id, patch) {
+    const all = loadProfiles();
+    const cur = all[id] || { bio: '', equipped: {} };
+    if (patch.bio !== undefined) cur.bio = patch.bio;
+    if (patch.equipped !== undefined) cur.equipped = patch.equipped;
+    all[id] = cur;
+    try { fs.writeFileSync(profilesPath, JSON.stringify(all)); }
+    catch (e) { log.error(`profile save failed: ${e.message}`); }
+    return getProfile(id);
+  }
+
   return {
     kind: 'file',
     accountsEnabled: true,
@@ -264,6 +290,8 @@ function createFileStore(config, snapshots) {
     friendRespond: (me, other, accept) => Promise.resolve(friendRespond(me, other, accept)),
     friendRemove: (me, other) => Promise.resolve(friendRemove(me, other)),
     friendBlock: (me, other, blocked) => Promise.resolve(friendBlock(me, other, blocked)),
+    getProfile: (id) => Promise.resolve(getProfile(id)),
+    setProfile: (id, patch) => Promise.resolve(setProfile(id, patch)),
     topFactories: (limit, ownerIds) => Promise.resolve(topFactories(limit || 20, ownerIds)),
     recentRooms: (sinceMs) => Promise.resolve(recentRooms(sinceMs)),
     flush: () => Promise.resolve(),

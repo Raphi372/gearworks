@@ -226,6 +226,20 @@ function createPostgresStore(config, snapshots) {
       }
       return { ok: true };
     },
+    /* ---- profiles: bio + equipped cosmetic loadout (ownership is derived) ---- */
+    async getProfile(id) {
+      const p = await prisma.profile.findUnique({ where: { accountId: id } }).catch(() => null);
+      return { bio: (p && p.bio) || '', equipped: (p && p.equipped) || {} };
+    },
+    async setProfile(id, patch) {
+      const create = { accountId: id, bio: patch.bio || '', equipped: patch.equipped || {} };
+      const update = {};
+      if (patch.bio !== undefined) update.bio = patch.bio;
+      if (patch.equipped !== undefined) update.equipped = patch.equipped;
+      await prisma.profile.upsert({ where: { accountId: id }, create, update })
+        .catch((e) => log.error(`pg profile save failed for ${id}: ${e.message}`));
+      return this.getProfile(id);
+    },
     async topFactories(limit, ownerIds) {
       const where = (ownerIds && ownerIds.length) ? { world: { ownerId: { in: ownerIds } } } : {};
       const rows = await prisma.factory.findMany({

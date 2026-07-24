@@ -15,6 +15,7 @@
 const Core = require('../../shared/core.js');
 const Progression = require('../../shared/progression.js');
 const Achievements = require('../../shared/achievements.js');
+const Cosmetics = require('../../shared/cosmetics.js');
 
 function createLobby(config, registry, auth, store, tokens, metrics, directory, presence, invites) {
   return function handleConn(conn) {
@@ -166,6 +167,45 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
           if (!account || !store.progression) return conn.send({ t: 'achievements', achievements: null });
           const p = await store.progression(account.id).catch(() => null);
           return conn.send({ t: 'achievements', achievements: Achievements.evaluate(p) });
+        }
+        /* --------------------- profiles + cosmetics locker ------------------ */
+        // A profile is a stored bio + equipped loadout; cosmetic OWNERSHIP is a
+        // derived projection of progression (DB-6), so the locker is always in
+        // sync with what you've earned and needs no ownership write path.
+        case 'profile': {   // your own locker, or another player's public profile
+          if (!store.getProfile) return conn.send({ t: 'profile', profile: null });
+          const uname = String(m.username || '').trim();
+          const target = uname ? await store.getAccountByName(uname).catch(() => null)
+            : (account ? await store.getAccount(account.id).catch(() => account) : null);
+          if (!target) return conn.send({ t: 'profile', profile: null });
+          const mine = !uname || (account && target.id === account.id);
+          const [stored, summary] = await Promise.all([
+            store.getProfile(target.id).catch(() => ({ bio: '', equipped: {} })),
+            store.progression ? store.progression(target.id).catch(() => null) : null,
+          ]);
+          const profile = {
+            username: target.username, color: target.color || null,
+            bio: stored.bio || '', level: (summary && summary.level) || 1,
+            loadout: Cosmetics.resolve(stored.equipped, summary),
+          };
+          // only your OWN locker carries the full catalog (owned vs locked)
+          if (mine) profile.catalog = Cosmetics.catalog(summary, stored.equipped);
+          return conn.send({ t: 'profile', profile, mine: !!mine });
+        }
+        case 'setProfile': {   // update your bio and/or equipped loadout
+          if (!account || !store.setProfile) return conn.send({ t: 'profile', profile: null });
+          const summary = store.progression ? await store.progression(account.id).catch(() => null) : null;
+          const patch = {};
+          if (m.bio !== undefined) patch.bio = String(m.bio).slice(0, 200);
+          if (m.equipped !== undefined) patch.equipped = Cosmetics.sanitize(m.equipped, summary);   // untrusted → clamp to owned
+          const stored = await store.setProfile(account.id, patch).catch(() => ({ bio: '', equipped: {} }));
+          const acct = await store.getAccount(account.id).catch(() => account);
+          return conn.send({ t: 'profile', mine: true, profile: {
+            username: acct.username, color: acct.color || null,
+            bio: stored.bio || '', level: (summary && summary.level) || 1,
+            loadout: Cosmetics.resolve(stored.equipped, summary),
+            catalog: Cosmetics.catalog(summary, stored.equipped),
+          } });
         }
         /* ------------------------------ social ------------------------------ */
         case 'friends':

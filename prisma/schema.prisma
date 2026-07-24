@@ -33,11 +33,24 @@ model Account {
   worlds       World[]      @relation("OwnedWorlds")
   memberships  WorldMember[]
   progression  Progression?
+  profile      Profile?
   stats        Stat[]
   friendsFrom  Friendship[] @relation("FriendFrom")
   friendsTo    Friendship[] @relation("FriendTo")
 
   @@index([lastSeenAt])
+}
+
+// ---- Profile: vanity layer (bio + equipped cosmetics), 1:1 with Account -----
+// Only the equipped loadout + bio are stored; cosmetic OWNERSHIP is a derived
+// projection of progression (shared/cosmetics.js), never persisted.
+model Profile {
+  id        String   @id @default(cuid())
+  accountId String   @unique
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  bio       String   @default("")
+  equipped  Json     @default("{}")          // { nameplate?: key, title?: key }
+  updatedAt DateTime @updatedAt
 }
 
 // ---- Social graph: directed friend/request/block edges ---------------------
