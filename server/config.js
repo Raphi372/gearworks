@@ -90,11 +90,15 @@ const config = {
   SNAPSHOT_S3_ACCESS_KEY: process.env.SNAPSHOT_S3_ACCESS_KEY || '',
   SNAPSHOT_S3_SECRET_KEY: process.env.SNAPSHOT_S3_SECRET_KEY || '',
   SNAPSHOT_S3_PREFIX: process.env.SNAPSHOT_S3_PREFIX || '',       // optional key prefix
-  // ephemeral presence (online / in-game) for friends. 'local' (single instance)
-  // or 'file' (shared dir). Kept out of the relational store (high-churn).
+  // ephemeral presence (online / in-game) for friends. 'local' (single instance),
+  // 'file' (shared dir), or 'redis' (shared cache). Kept out of the relational
+  // store (high-churn).
   PRESENCE: process.env.PRESENCE || 'local',
   PRESENCE_DIR: process.env.PRESENCE_DIR || '',               // defaults to <SAVE_DIR>/presence
   PRESENCE_TTL_MS: envInt('PRESENCE_TTL_MS', 60000),          // presence stale (→ offline) after this
+  PRESENCE_REFRESH_MS: envInt('PRESENCE_REFRESH_MS', 5000),   // redis backend: cluster-cache refresh interval
+  // optional Redis (RESP) endpoint for the shared ephemeral cache (PRESENCE=redis).
+  REDIS_URL: process.env.REDIS_URL || '',                     // e.g. redis://:pass@host:6379
   // pending world invites (friend → your world). Ephemeral like presence.
   INVITES: process.env.INVITES || 'local',
   INVITE_DIR: process.env.INVITE_DIR || '',                   // defaults to <SAVE_DIR>/invites
