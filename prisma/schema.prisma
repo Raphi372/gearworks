@@ -40,8 +40,24 @@ model Account {
   friendsTo    Friendship[] @relation("FriendTo")
   reportsMade    Report[]   @relation("ReportsMade")
   reportsAgainst Report[]   @relation("ReportsAgainst")
+  flag         Flag?
 
   @@index([lastSeenAt])
+}
+
+// ---- Flag: an anti-cheat anomaly flag on an account, 1:1 (Phase 3) ----------
+// A human-in-the-loop signal (score, don't auto-ban): the anomaly scorer records
+// one when a player's weighted anomaly score crosses the threshold. `count` is
+// how many times they've been flagged; latest reason/score/room win.
+model Flag {
+  id        String   @id @default(cuid())
+  accountId String   @unique
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  reason    String   @default("")
+  score     Int      @default(0)
+  roomCode  String?
+  count     Int      @default(1)
+  updatedAt DateTime @updatedAt
 }
 
 // ---- Report: a player flags another account for admin review (Phase 3) ------

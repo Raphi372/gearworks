@@ -110,6 +110,14 @@ const config = {
   // moderation: comma-separated usernames (case-insensitive) granted the ban
   // tools. Empty by default, so the $0 single-instance deploy has no admins.
   ADMIN_USERS: (process.env.ADMIN_USERS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+  // anti-cheat: accumulate weighted anomaly signals (rate-limit hits, rejected
+  // commands, permission violations, hash divergence) per authed player; when the
+  // score crosses the threshold, record a flag for admin review (score, don't
+  // auto-ban). 0 disables. Scores decay over ANTICHEAT_DECAY_MS; a subject is
+  // re-flagged at most once per ANTICHEAT_COOLDOWN_MS.
+  ANTICHEAT_FLAG_SCORE: envInt('ANTICHEAT_FLAG_SCORE', 60),
+  ANTICHEAT_DECAY_MS: envInt('ANTICHEAT_DECAY_MS', 15000),
+  ANTICHEAT_COOLDOWN_MS: envInt('ANTICHEAT_COOLDOWN_MS', 60000),
 
   // account recovery (password reset / email verification)
   RESET_TTL_MIN: envInt('RESET_TTL_MIN', 45),      // reset/verify token lifetime

@@ -343,6 +343,37 @@ function createFileStore(config, snapshots) {
     return { ok: true };
   }
 
+  /* -------- anti-cheat flags: one row per account, latest wins (JSON) -------- */
+  const flagsPath = path.join(SAVE_DIR, 'flags.json');
+  let flags = null;
+  function loadFlags() {
+    if (flags) return flags;
+    try { flags = JSON.parse(fs.readFileSync(flagsPath, 'utf8')); } catch (e) { flags = {}; }
+    if (!flags || typeof flags !== 'object') flags = {};
+    return flags;
+  }
+  function persistFlags() {
+    try { fs.writeFileSync(flagsPath, JSON.stringify(loadFlags())); }
+    catch (e) { log.error(`flags save failed: ${e.message}`); }
+  }
+  function recordFlag(f) {
+    const all = loadFlags();
+    const cur = all[f.accountId] || { count: 0, at: 0 };
+    all[f.accountId] = { name: f.name || cur.name || null, roomCode: f.roomCode || null,
+      reason: f.reason || '', score: f.score | 0, count: (cur.count | 0) + 1, at: Date.now() };
+    persistFlags(); return { ok: true };
+  }
+  function listFlags() {
+    const all = loadFlags(); const accts = loadAccounts(); const out = [];
+    for (const id of Object.keys(all)) {
+      const f = all[id];
+      out.push({ id, name: f.name || (accts.byId[id] ? accts.byId[id].username : null),
+        roomCode: f.roomCode, reason: f.reason, score: f.score, count: f.count, at: f.at });
+    }
+    return out.sort((x, y) => y.at - x.at);
+  }
+  function clearFlag(id) { const all = loadFlags(); if (all[id]) { delete all[id]; persistFlags(); } return { ok: true }; }
+
   return {
     kind: 'file',
     accountsEnabled: true,
@@ -371,6 +402,9 @@ function createFileStore(config, snapshots) {
     createReport: (r) => Promise.resolve(createReport(r)),
     listReports: () => Promise.resolve(listReports()),
     resolveReport: (id, status) => Promise.resolve(resolveReport(id, status)),
+    recordFlag: (f) => Promise.resolve(recordFlag(f)),
+    listFlags: () => Promise.resolve(listFlags()),
+    clearFlag: (id) => Promise.resolve(clearFlag(id)),
     topFactories: (limit, ownerIds) => Promise.resolve(topFactories(limit || 20, ownerIds)),
     recentRooms: (sinceMs) => Promise.resolve(recentRooms(sinceMs)),
     flush: () => Promise.resolve(),

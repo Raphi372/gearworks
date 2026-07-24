@@ -163,7 +163,7 @@ function NetSession(_unused, url, cb) {
       case 'stats': cb.stats && cb.stats(m.series || null); return;
       case 'achievements': cb.achievements && cb.achievements(m.achievements || null); return;
       case 'profile': cb.profile && cb.profile(m.profile || null, !!m.mine); return;
-      case 'mod': cb.mod && cb.mod(m.bans || null, m.reports || null, m.error || null); return;
+      case 'mod': cb.mod && cb.mod(m.bans || null, m.reports || null, m.flags || null, m.error || null); return;
       case 'reported': cb.reported && cb.reported(m); return;
       case 'friends': cb.friends && cb.friends(m); return;
       case 'invites': cb.invites && cb.invites(m.invites || []); return;
@@ -282,6 +282,7 @@ function NetSession(_unused, url, cb) {
   self.sendUnban = function (username) { send({ t: 'unban', username: username }); };
   self.sendReport = function (username, reason) { send({ t: 'report', username: username, reason: reason }); };
   self.sendReportResolve = function (id, action) { send({ t: 'reportResolve', id: id, action: action }); };
+  self.sendFlagClear = function (id) { send({ t: 'flagClear', id: id }); };
   self.requestFriends = function () { send({ t: 'friends' }); };
   self.friendReq = function (username) { send({ t: 'friendReq', username: username }); };
   self.friendResp = function (id, accept) { send({ t: 'friendResp', id: id, accept: accept }); };

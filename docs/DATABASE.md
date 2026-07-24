@@ -75,6 +75,13 @@ Defined in `prisma/schema.prisma`:
   admin resolves or dismisses (`ReportStatus`), optionally issuing a `Ban`. Any
   signed-in player files one (`report`); the queue + triage are admin-gated
   (`reportResolve`). The file backend keeps the same in `reports.json`.
+- **Flag** — an anti-cheat anomaly flag on an account (Phase 3), 1:1: the
+  scorer (`server/anticheat.js`) records one when a player's weighted anomaly
+  score (rate-limit hits, rejected commands, permission violations, hash
+  divergence) crosses `ANTICHEAT_FLAG_SCORE`. `count` tracks repeats; latest
+  reason/score/room win. **Score, don't auto-ban** — flags surface in the
+  admin queue for a human decision. The file backend keeps the same in
+  `flags.json`.
 - **Stat** — time-series counters, one row per `(account, key, recordedAt)`.
   A periodic sampler (`server/stats.js`, every `STAT_SAMPLE_MIN` minutes;
   `0` disables it) records one point per metric — `net_worth`, `entities`,

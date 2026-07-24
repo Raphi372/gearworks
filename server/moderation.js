@@ -79,7 +79,21 @@ function createModeration(config, store) {
     return { ok: true };
   }
 
-  return { isAdmin, check, ban, unban, list, report, reports, resolveReport };
+  /* ---- anti-cheat flags (recorded by the scorer; admins triage) ---- */
+  async function flags(byUsername) {
+    if (!isAdmin(byUsername)) return { error: 'not authorized' };
+    const list = store.listFlags ? await store.listFlags().catch(() => []) : [];
+    return { flags: list };
+  }
+
+  async function clearFlag(byUsername, accountId) {
+    if (!isAdmin(byUsername)) return { error: 'not authorized' };
+    if (!store.clearFlag) return { error: 'flags unavailable' };
+    await store.clearFlag(String(accountId || ''));
+    return { ok: true };
+  }
+
+  return { isAdmin, check, ban, unban, list, report, reports, resolveReport, flags, clearFlag };
 }
 
 module.exports = { createModeration };

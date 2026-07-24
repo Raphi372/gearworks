@@ -684,6 +684,21 @@ global-identity features (moderation, anti-cheat depth).
 >   Proven by a **two-process** test (region-tagged aggregation + region-scoped
 >   quickplay routing across an eu/us pair) and browser-verified (the picker
 >   appears with both regions and filters; hidden for a single region).
+>
+> - **Slice 4 (anti-cheat anomaly scoring):** `server/anticheat.js` — a per-
+>   authed-player scorer that turns the anomalies the authoritative room already
+>   surfaces (rate-limit hits, sim-rejected commands, permission violations, hash
+>   divergence) into a weighted score; crossing a threshold records a **flag** for
+>   admin review. The rule is **score, don't auto-ban** ([SEC-3]): flags land in
+>   the same moderation queue as reports (human-in-the-loop). Scores decay so
+>   blips fade; a cooldown caps repeat flags; only authed players are scored (a
+>   flag must point at an actionable account). `Flag` (1:1, migration `0011`, both
+>   backends); the `mod` payload gains a flags queue; the admin panel renders it
+>   with Ban/Dismiss. Inert by default (`ANTICHEAT_FLAG_SCORE=0` disables; empty
+>   `ADMIN_USERS` means no one sees it). Proven by a scorer unit test
+>   (accumulate/threshold/cooldown/decay/anon-ignored/disabled) + an integration
+>   test (a command-spamming client is flagged in a live room and an admin sees +
+>   dismisses it), and browser-verified.
 
 **Files affected**
 - Infra: per-region deploy config (regions, endpoints), regional Prometheus scrape.
