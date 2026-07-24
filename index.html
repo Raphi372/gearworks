@@ -267,7 +267,10 @@ label.row { display:flex; justify-content:space-between; align-items:center; fon
   <div id="lb-rooms-wrap">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
       <b style="font-size:13px">Public games</b>
-      <button class="btn gray" id="lb-refresh">↻ Refresh</button>
+      <span style="display:flex;gap:6px;align-items:center">
+        <select class="txt" id="lb-region" style="display:none;margin:0;padding:4px 6px;width:auto"></select>
+        <button class="btn gray" id="lb-refresh">↻ Refresh</button>
+      </span>
     </div>
     <div id="lb-rooms"><p style="color:#667;font-size:12px">Connect to see games…</p></div>
   </div>

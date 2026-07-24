@@ -78,7 +78,7 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
           if (m.authToken) account = await auth.fromToken(m.authToken);   // silent auto-login
           touchOnline();
           conn.send({ t: 'lobby', proto: Core.PROTO, rooms: registry.publicRooms(),
-            account: outAcct(account), maintenance: config.MAINTENANCE });
+            account: outAcct(account), maintenance: config.MAINTENANCE, region: config.REGION });
           return;
         }
         case 'auth': {
@@ -115,7 +115,7 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
           return conn.send({ t: 'account', ok: !r.error, error: r.error, account: outAcct(account) });
         }
         case 'listRooms':
-          conn.send({ t: 'lobby', proto: Core.PROTO, rooms: registry.publicRooms(), account: account || null, maintenance: config.MAINTENANCE });
+          conn.send({ t: 'lobby', proto: Core.PROTO, rooms: registry.publicRooms(), account: outAcct(account), maintenance: config.MAINTENANCE, region: config.REGION });
           return;
         case 'resolve': {
           // control handoff over the lobby socket (CSP-safe, no cross-origin
@@ -296,12 +296,16 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
           return conn.send({ t: 'invites', invites: invites.listFor(account.id) });
         }
         case 'quickplay': {
-          // "find me a game": the best public room with a free seat (this region
-          // first, fuller rooms first so players congregate), else tell the
-          // client to host one. The join/create still runs the normal flow.
+          // "find me a game": the best public room with a free seat, else tell
+          // the client to host one. The join/create still runs the normal flow.
+          // An optional `region` filter hard-limits the search to one region (the
+          // regional picker); otherwise this region is preferred, fuller rooms
+          // first so players congregate.
           const region = config.REGION;
+          const want = (m.region && m.region !== 'any') ? String(m.region) : null;
           const joinable = registry.publicRooms()
             .filter((r) => (r.maxPlayers ? r.players < r.maxPlayers : true))
+            .filter((r) => (want ? r.region === want : true))
             .sort((a, b) => {
               const ra = (a.region === region ? 0 : 1), rb = (b.region === region ? 0 : 1);
               return ra !== rb ? ra - rb : b.players - a.players;

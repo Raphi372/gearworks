@@ -672,6 +672,18 @@ global-identity features (moderation, anti-cheat depth).
 >   Ban/Dismiss. Proven by an end-to-end test (file → admin queue → dismiss;
 >   dedup; non-admin can file but not triage; no self/admin reports) and
 >   browser-verified end to end.
+>
+> - **Slice 3 (regional server picker):** the player-facing side of the region
+>   tags that already flow through the directory/listing. The `lobby` payload
+>   reports the instance's home `region`; every listing row is already region-
+>   tagged (local rooms + remote rows aggregated over the directory). Quickplay
+>   takes an optional `region` — a hard filter to that region, else this region
+>   is preferred (fuller rooms first). Client: a region `<select>` above the
+>   room browser that filters the listing and scopes Quick Play, shown only when
+>   2+ regions are visible (the single-region / $0 `local` deploy shows nothing).
+>   Proven by a **two-process** test (region-tagged aggregation + region-scoped
+>   quickplay routing across an eu/us pair) and browser-verified (the picker
+>   appears with both regions and filters; hidden for a single region).
 
 **Files affected**
 - Infra: per-region deploy config (regions, endpoints), regional Prometheus scrape.
