@@ -169,7 +169,15 @@ function createLobby(config, registry, auth, store, tokens, metrics, directory, 
         case 'achievements': {   // derived from cross-world progression (DB-6)
           if (!account || !store.progression) return conn.send({ t: 'achievements', achievements: null });
           const p = await store.progression(account.id).catch(() => null);
-          return conn.send({ t: 'achievements', achievements: Achievements.evaluate(p) });
+          const evaluated = Achievements.evaluate(p);
+          // announce newly-crossed unlocks: the ledger only tracks what we've
+          // already shown, so `fresh` is the diff — ownership stays derived.
+          let fresh = [];
+          if (store.markAchievements) {
+            const unlocked = evaluated.list.filter((a) => a.unlocked).map((a) => a.key);
+            fresh = await store.markAchievements(account.id, unlocked).catch(() => []);
+          }
+          return conn.send({ t: 'achievements', achievements: evaluated, fresh });
         }
         /* --------------------- profiles + cosmetics locker ------------------ */
         // A profile is a stored bio + equipped loadout; cosmetic OWNERSHIP is a

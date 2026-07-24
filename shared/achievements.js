@@ -5,8 +5,10 @@
    progression: a pure function of the account's progression summary
    (level / net worth / buildings / unlocked tech), never a second source of
    truth. So they are always fresh and need no write path — the server computes
-   them on demand from `store.progression(...)`. A durable "unlocked at"
-   timestamp (for notifications / reward grants) is a later, additive increment.
+   them on demand from `store.progression(...)`. A durable unlock LEDGER
+   (`store.markAchievements`) records which unlocks have been announced so the
+   server can surface newly-crossed ones once — bookkeeping only, not a second
+   source of truth for whether an achievement is unlocked.
 
    Runs identically in the browser (to render the panel) and in Node.
    ========================================================================== */
