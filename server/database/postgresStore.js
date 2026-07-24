@@ -12,6 +12,7 @@
    progression/stats live in relational tables for the persistent metagame.
    ========================================================================== */
 const Progression = require('../../shared/progression.js');
+const { createRouting } = require('./replica');
 
 function createPostgresStore(config, snapshots) {
   const { DATABASE_URL, log } = config;
@@ -46,6 +47,13 @@ function createPostgresStore(config, snapshots) {
     return { ok: true };
   }
   const prisma = new PrismaClient({ datasources: { db: { url: DATABASE_URL } } });
+  // optional read replica: lag-tolerant reads route here, writes + authz reads
+  // stay on the primary ([DB-9]). `db.read` is the replica when configured.
+  const replica = config.DATABASE_REPLICA_URL
+    ? new PrismaClient({ datasources: { db: { url: config.DATABASE_REPLICA_URL } } })
+    : null;
+  const db = createRouting(prisma, replica);
+  if (db.hasReplica) log('persistence: read replica active (listing/leaderboard/stats reads)');
 
   // app role (lowercase) -> Prisma Role enum
   function roleEnum(r) { const R = String(r || '').toUpperCase(); return ['HOST', 'ADMIN', 'PLAYER', 'SPECTATOR'].includes(R) ? R : 'PLAYER'; }
@@ -103,7 +111,12 @@ function createPostgresStore(config, snapshots) {
   return {
     kind: 'postgres',
     accountsEnabled: true,
-    ready: async () => { await prisma.$queryRaw`SELECT 1`; },
+    ready: async () => {
+      await prisma.$queryRaw`SELECT 1`;   // the primary must be up; boot fails otherwise
+      // a replica outage is non-fatal — reads degrade to empty and can be pointed
+      // back at the primary by clearing DATABASE_REPLICA_URL; just warn.
+      if (replica) await replica.$queryRaw`SELECT 1`.catch((e) => log.warn(`read replica not reachable: ${e.message}`));
+    },
     saveRoom(code, data) { pending.set(code, data); drain(); return true; },     // fire-and-forget
     async loadRoom(code) {
       const w = await prisma.world.findUnique({ where: { code } }).catch(() => null);
@@ -116,15 +129,15 @@ function createPostgresStore(config, snapshots) {
       const rows = await prisma.world.findMany({ select: { code: true } }).catch(() => []);
       return rows.map((r) => r.code);
     },
-    async worldsByOwner(ownerId) {
-      const rows = await prisma.world.findMany({
+    async worldsByOwner(ownerId) {   // "my worlds" listing — lag-tolerant → replica
+      const rows = await db.read.world.findMany({
         where: { ownerId }, select: { code: true, name: true, savedAt: true },
         orderBy: { savedAt: 'desc' },
       }).catch(() => []);
       return rows.map((r) => ({ code: r.code, name: r.name, savedAt: +r.savedAt }));
     },
-    async worldsByMember(accountId) {
-      const rows = await prisma.worldMember.findMany({
+    async worldsByMember(accountId) {   // "my worlds" listing — lag-tolerant → replica
+      const rows = await db.read.worldMember.findMany({
         where: { accountId },
         include: { world: { select: { code: true, name: true, ownerId: true, savedAt: true } } },
         orderBy: { world: { savedAt: 'desc' } },
@@ -132,7 +145,7 @@ function createPostgresStore(config, snapshots) {
       return rows.map((m) => ({ code: m.world.code, name: m.world.name, ownerId: m.world.ownerId,
         role: String(m.role).toLowerCase(), savedAt: +m.world.savedAt }));
     },
-    async membership(accountId, code) {
+    async membership(accountId, code) {   // AUTHZ read — always primary ([DB-9])
       const w = await prisma.world.findUnique({ where: { code }, select: { id: true } }).catch(() => null);
       if (!w) return null;
       const m = await prisma.worldMember.findUnique({ where: { accountId_worldId: { accountId, worldId: w.id } } }).catch(() => null);
@@ -176,8 +189,8 @@ function createPostgresStore(config, snapshots) {
         if (stale.length) await prisma.stat.deleteMany({ where: { id: { in: stale.map((r) => r.id) } } }).catch(() => {});
       }
     },
-    async statsFor(accountId) {
-      const rows = await prisma.stat.findMany({ where: { accountId }, orderBy: { recordedAt: 'asc' } }).catch(() => []);
+    async statsFor(accountId) {   // stats history display — lag-tolerant → replica
+      const rows = await db.read.stat.findMany({ where: { accountId }, orderBy: { recordedAt: 'asc' } }).catch(() => []);
       const out = {};
       rows.forEach((r) => { (out[r.key] || (out[r.key] = [])).push({ t: +r.recordedAt, v: Number(r.value) }); });
       return out;
@@ -311,9 +324,9 @@ function createPostgresStore(config, snapshots) {
       await prisma.flag.deleteMany({ where: { accountId: id } }).catch(() => {});
       return { ok: true };
     },
-    async topFactories(limit, ownerIds) {
+    async topFactories(limit, ownerIds) {   // leaderboard — lag-tolerant → replica
       const where = (ownerIds && ownerIds.length) ? { world: { ownerId: { in: ownerIds } } } : {};
-      const rows = await prisma.factory.findMany({
+      const rows = await db.read.factory.findMany({
         where, orderBy: { money: 'desc' }, take: limit || 20,
         include: { world: { select: { code: true, name: true, ownerId: true, savedAt: true, owner: { select: { username: true } } } } },
       }).catch(() => []);
@@ -332,7 +345,7 @@ function createPostgresStore(config, snapshots) {
         public: w.isPublic, snapshot: (await hydrate(w)).snapshot, savedAt: +w.savedAt })));
     },
     flush: () => drain(),
-    async close() { await drain(); await prisma.$disconnect(); },
+    async close() { await drain(); await prisma.$disconnect(); if (replica) await replica.$disconnect().catch(() => {}); },
 
     /* ---- accounts ---- */
     async getAccountByName(name) {
