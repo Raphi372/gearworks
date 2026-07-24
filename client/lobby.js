@@ -15,6 +15,9 @@ var Lobby = (function () {
   var lbScope = 'global';     // leaderboard scope: global | friends
   var viewingProfile = null;  // username whose public profile is shown, or null (own locker)
   var profileCatalog = [];    // last-rendered cosmetics catalog (own locker)
+  var homeRegion = null;      // this instance's region (from the lobby payload)
+  var regionFilter = 'any';   // room-browser region filter: 'any' | a region
+  var lastRooms = [];         // last public listing (for re-filtering without a refetch)
   var forgotOpen = false;     // password-reset sub-form visible
   var resetPrefill = null;    // reset token from an emailed link (?reset=)
   var pendingVerify = null;   // verify token from an emailed link (?verify=)
@@ -104,9 +107,10 @@ var Lobby = (function () {
       go({ kind: 'join', code: code, spectate: el('lb-spectate').checked });
     };
     el('lb-quickplay').onclick = function () {
-      if (browserSess) { err('Finding a game…'); browserSess.quickplay(); }
+      if (browserSess) { err('Finding a game…'); browserSess.quickplay(regionFilter); }
       else { applyDiscovery(reconnectBrowser); }
     };
+    el('lb-region').onchange = function () { regionFilter = el('lb-region').value || 'any'; onRooms(lastRooms); };
     el('lb-rooms').addEventListener('click', function (e) {
       var b = e.target.closest('[data-roomcode]');
       if (b) go({ kind: 'join', code: b.dataset.roomcode, spectate: el('lb-spectate').checked });
@@ -626,6 +630,7 @@ var Lobby = (function () {
         if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); browserSess.requestProfile(); if (account && account.admin) browserSess.requestBans(); }
         if (pendingVerify) { browserSess.sendVerifyEmail(pendingVerify); pendingVerify = null; }
         browserSess.requestLeaderboard(lbScope);
+        if (m && m.region) homeRegion = m.region;
         onRooms(rooms);
       },
       auth: function (m) { onAuth(m); },
@@ -654,11 +659,37 @@ var Lobby = (function () {
     browserSess.begin({ kind: 'browse', name: el('lb-name').value || 'Engineer', color: color, authToken: authToken });
   }
 
+  // the set of regions worth offering: those present in the listing plus this
+  // instance's home region. Only meaningful with 2+ regions, so a single-region
+  // deploy (incl. the $0 'local' default) shows no picker.
+  function knownRegions(rooms) {
+    var set = {};
+    (rooms || []).forEach(function (r) { if (r.region) set[r.region] = 1; });
+    if (homeRegion) set[homeRegion] = 1;
+    var list = Object.keys(set);
+    return list.length >= 2 ? list.sort() : [];
+  }
+  function renderRegionPicker(rooms) {
+    var sel = el('lb-region'); if (!sel) return;
+    var regions = knownRegions(rooms);
+    if (!regions.length) { sel.style.display = 'none'; return; }
+    if (regionFilter !== 'any' && regions.indexOf(regionFilter) < 0) regionFilter = 'any';
+    var opts = '<option value="any">All regions</option>';
+    regions.forEach(function (r) { opts += '<option value="' + esc(r) + '"' + (r === regionFilter ? ' selected' : '') + '>' + esc(r) + (r === homeRegion ? ' (home)' : '') + '</option>'; });
+    sel.innerHTML = opts; sel.value = regionFilter; sel.style.display = '';
+  }
   function onRooms(rooms) {
+    lastRooms = rooms || [];
+    renderRegionPicker(lastRooms);
     var host = el('lb-rooms');
-    if (!rooms || !rooms.length) { host.innerHTML = '<p style="color:#667;font-size:12px">No public games yet — host one below!</p>'; return; }
+    var shown = regionFilter === 'any' ? lastRooms : lastRooms.filter(function (r) { return r.region === regionFilter; });
+    if (!shown.length) {
+      host.innerHTML = '<p style="color:#667;font-size:12px">' +
+        (regionFilter === 'any' ? 'No public games yet — host one below!' : 'No public games in ' + esc(regionFilter) + ' — try another region.') + '</p>';
+      return;
+    }
     var h = '';
-    rooms.forEach(function (r) {
+    shown.forEach(function (r) {
       var cap = r.maxPlayers ? (r.players + '/' + r.maxPlayers + ' players') : (r.players + ' online');
       var reg = (r.region && r.region !== 'local') ? ' • ' + esc(r.region) : '';
       h += '<div class="roomrow"><div><div class="rn">' + esc(r.name) + '</div>' +
