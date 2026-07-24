@@ -80,9 +80,10 @@ Defined in `prisma/schema.prisma`:
   scorer (`server/anticheat.js`) records one when a player's weighted anomaly
   score (rate-limit hits, rejected commands, permission violations, hash
   divergence) crosses `ANTICHEAT_FLAG_SCORE`. `count` tracks repeats; latest
-  reason/score/room win. **Score, don't auto-ban** — flags surface in the
-  admin queue for a human decision. The file backend keeps the same in
-  `flags.json`.
+  reason/score/room win, and `replay` holds the captured recent-input window
+  (type + tick, `ANTICHEAT_REPLAY_WINDOW`) for admin review ([SEC-3]). **Score,
+  don't auto-ban** — flags surface in the admin queue for a human decision. The
+  file backend keeps the same in `flags.json`.
 - **Stat** — time-series counters, one row per `(account, key, recordedAt)`.
   A periodic sampler (`server/stats.js`, every `STAT_SAMPLE_MIN` minutes;
   `0` disables it) records one point per metric — `net_worth`, `entities`,

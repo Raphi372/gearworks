@@ -73,6 +73,7 @@ model Flag {
   score     Int      @default(0)
   roomCode  String?
   count     Int      @default(1)
+  replay    Json     @default("[]")          // captured recent-input window ([SEC-3])
   updatedAt DateTime @updatedAt
 }
 

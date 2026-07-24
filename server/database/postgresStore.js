@@ -306,10 +306,11 @@ function createPostgresStore(config, snapshots) {
     },
     // one flag row per account; latest reason/score/room win, count increments
     async recordFlag(f) {
+      const replay = Array.isArray(f.replay) ? f.replay : [];
       await prisma.flag.upsert({
         where: { accountId: f.accountId },
-        create: { accountId: f.accountId, reason: f.reason || '', score: f.score | 0, roomCode: f.roomCode || null, count: 1 },
-        update: { reason: f.reason || '', score: f.score | 0, roomCode: f.roomCode || null, count: { increment: 1 } },
+        create: { accountId: f.accountId, reason: f.reason || '', score: f.score | 0, roomCode: f.roomCode || null, count: 1, replay },
+        update: { reason: f.reason || '', score: f.score | 0, roomCode: f.roomCode || null, count: { increment: 1 }, replay },
       }).catch((e) => log.error(`pg flag failed for ${f.accountId}: ${e.message}`));
       return { ok: true };
     },
@@ -318,7 +319,8 @@ function createPostgresStore(config, snapshots) {
         orderBy: { updatedAt: 'desc' }, include: { account: { select: { username: true } } },
       }).catch(() => []);
       return rows.map((f) => ({ id: f.accountId, name: f.account ? f.account.username : null,
-        roomCode: f.roomCode, reason: f.reason, score: f.score, count: f.count, at: +f.updatedAt }));
+        roomCode: f.roomCode, reason: f.reason, score: f.score, count: f.count, at: +f.updatedAt,
+        replay: Array.isArray(f.replay) ? f.replay : [] }));
     },
     async clearFlag(id) {
       await prisma.flag.deleteMany({ where: { accountId: id } }).catch(() => {});

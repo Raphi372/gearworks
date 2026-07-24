@@ -207,6 +207,14 @@ class Room {
     switch (m.t) {
       case 'cmd': {
         if (typeof m.cmd !== 'object' || !m.cmd) return;
+        // anti-cheat replay: keep a bounded ring of this client's recent input
+        // attempts (type + tick), captured with a flag for admin review ([SEC-3]).
+        if (this.anticheat && this.anticheat.enabled) {
+          const W = this.cfg.ANTICHEAT_REPLAY_WINDOW | 0 || 40;
+          const log = c.cmdLog || (c.cmdLog = []);
+          log.push({ t: String(m.cmd.t || '?').slice(0, 24), tick: this.game.S.tick | 0, at: Date.now() });
+          if (log.length > W) log.shift();
+        }
         // permission gate
         const need = this.game.Commands.PERMS[m.cmd.t];
         // a client sending a server-only / above-its-role command is a strong
