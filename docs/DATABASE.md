@@ -57,6 +57,14 @@ Defined in `prisma/schema.prisma`:
   `([otherId, status])` for the "requests to me" query. The file backend keeps
   the same graph in `friends.json`. Served over the lobby via `friends` /
   `friendReq` / `friendResp` / `friendRemove` / `friendBlock`.
+- **Profile** — the vanity layer (Phase 2), 1:1 with an account: a short `bio`
+  and an `equipped` loadout (JSON, `{ nameplate?, title? }`). Only these two
+  fields are stored; cosmetic **ownership is a derived projection** of
+  progression (`shared/cosmetics.js`), never persisted, so the locker is always
+  in sync with what you've earned. The file backend keeps the same in
+  `profiles.json`. Served over the lobby via `profile` (own locker, or another
+  player's public card) / `setProfile` (equip requests are sanitized against
+  derived ownership, so an untrusted client can only wear what it's earned).
 - **Stat** — time-series counters, one row per `(account, key, recordedAt)`.
   A periodic sampler (`server/stats.js`, every `STAT_SAMPLE_MIN` minutes;
   `0` disables it) records one point per metric — `net_worth`, `entities`,
@@ -68,10 +76,12 @@ Defined in `prisma/schema.prisma`:
 
 The authoritative truth always lives in `World.snapshot`; `Factory` and
 `Progression` are derived projections for cheap queries (guidelines DB-6) —
-never a second source of truth. **Achievements** are likewise derived — a pure
-function of the progression summary (`shared/achievements.js`), computed on
-demand, so there is no separate write path; a durable "unlocked-at" record is a
-later additive increment.
+never a second source of truth. **Achievements** and **cosmetic ownership** are
+likewise derived — pure functions of the progression summary
+(`shared/achievements.js`, `shared/cosmetics.js`), computed on demand, so there
+is no separate write path; only the player's chosen loadout + bio (`Profile`)
+are stored. A durable achievement "unlocked-at" record is a later additive
+increment.
 
 ## Leaderboard
 

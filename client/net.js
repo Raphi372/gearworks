@@ -162,6 +162,7 @@ function NetSession(_unused, url, cb) {
       case 'progression': cb.progression && cb.progression(m.progression || null); return;
       case 'stats': cb.stats && cb.stats(m.series || null); return;
       case 'achievements': cb.achievements && cb.achievements(m.achievements || null); return;
+      case 'profile': cb.profile && cb.profile(m.profile || null, !!m.mine); return;
       case 'friends': cb.friends && cb.friends(m); return;
       case 'invites': cb.invites && cb.invites(m.invites || []); return;
       case 'invited': cb.invited && cb.invited(m); return;
@@ -272,6 +273,8 @@ function NetSession(_unused, url, cb) {
   self.requestProgression = function () { send({ t: 'progression' }); };
   self.requestStats = function () { send({ t: 'stats' }); };
   self.requestAchievements = function () { send({ t: 'achievements' }); };
+  self.requestProfile = function (username) { send(username ? { t: 'profile', username: username } : { t: 'profile' }); };
+  self.sendSetProfile = function (patch) { send(Object.assign({ t: 'setProfile' }, patch || {})); };
   self.requestFriends = function () { send({ t: 'friends' }); };
   self.friendReq = function (username) { send({ t: 'friendReq', username: username }); };
   self.friendResp = function (id, accept) { send({ t: 'friendResp', id: id, accept: accept }); };

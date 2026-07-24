@@ -13,6 +13,8 @@ var Lobby = (function () {
   var authToken = null;       // persisted session token
   var authTab = 'guest';      // guest | login | register
   var lbScope = 'global';     // leaderboard scope: global | friends
+  var viewingProfile = null;  // username whose public profile is shown, or null (own locker)
+  var profileCatalog = [];    // last-rendered cosmetics catalog (own locker)
   var forgotOpen = false;     // password-reset sub-form visible
   var resetPrefill = null;    // reset token from an emailed link (?reset=)
   var pendingVerify = null;   // verify token from an emailed link (?verify=)
@@ -119,6 +121,7 @@ var Lobby = (function () {
       if (add) { var u = (el('fr-add').value || '').trim(); if (u) browserSess.friendReq(u); return; }
       var b = e.target.closest('[data-fr]'); if (!b) return;
       var id = b.dataset.id, op = b.dataset.fr;
+      if (op === 'view') { browserSess.requestProfile(b.dataset.name); return; }
       if (op === 'accept') browserSess.friendResp(id, true);
       else if (op === 'decline') browserSess.friendResp(id, false);
       else if (op === 'remove') browserSess.friendRemove(id);
@@ -135,6 +138,17 @@ var Lobby = (function () {
       var b = e.target.closest('[data-inv]'); if (!b) return;
       if (b.dataset.inv === 'accept') browserSess.inviteAccept(b.dataset.id);
       else if (b.dataset.inv === 'decline') browserSess.inviteDecline(b.dataset.id);
+    });
+    el('lb-profile').addEventListener('click', function (e) {
+      if (!browserSess) return;
+      if (e.target.closest('#pf-back')) { viewingProfile = null; browserSess.requestProfile(); return; }
+      if (e.target.closest('#pf-bio-save')) { browserSess.sendSetProfile({ bio: (el('pf-bio').value || '') }); return; }
+      var c = e.target.closest('[data-cos-key]'); if (!c || c.classList.contains('locked')) return;
+      var eq = equippedFromCatalog();
+      // toggle: tapping the equipped one clears the slot, else it takes the slot
+      if (c.dataset.cosOn === '1') delete eq[c.dataset.cosKind];
+      else eq[c.dataset.cosKind] = c.dataset.cosKey;
+      browserSess.sendSetProfile({ equipped: eq });
     });
     el('reconn-leave').onclick = function () { location.reload(); };
     renderAccount();
@@ -286,7 +300,7 @@ var Lobby = (function () {
     authToken = m.token;
     try { localStorage.setItem('gearworks_token', authToken); } catch (e) {}
     renderAccount();
-    if (browserSess) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); }
+    if (browserSess) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); browserSess.requestProfile(); }
   }
 
   function onAccount(m) {
@@ -307,6 +321,7 @@ var Lobby = (function () {
     el('lb-friends').innerHTML = '';
     el('lb-invites').innerHTML = '';
     el('lb-achievements').innerHTML = '';
+    el('lb-profile').innerHTML = ''; viewingProfile = null; profileCatalog = [];
     lbScope = 'global'; el('lb-lb-scope').textContent = 'Friends';
     if (browserSess) browserSess.requestLeaderboard('global');   // back to the global board
   }
@@ -326,6 +341,64 @@ var Lobby = (function () {
         '</div></div>';
     });
     host.innerHTML = h;
+  }
+
+  // a name rendered in its equipped nameplate colour, with an optional title tag
+  function nameTag(name, loadout) {
+    var lo = loadout || {};
+    var col = lo.nameplate || '#e6eef6';
+    var title = lo.title ? '<span class="nt-title">' + esc(lo.title) + '</span>' : '';
+    return '<span class="name-tag">' + title + '<b style="color:' + esc(col) + '">' + esc(name) + '</b></span>';
+  }
+
+  // the profile panel: your own cosmetics locker (bio + equippable grid), or a
+  // read-only view of another player's public profile.
+  function onProfile(m, mine) {
+    var host = el('lb-profile');
+    if (!host) return;
+    if (!account || !m) { host.innerHTML = ''; profileCatalog = []; return; }
+    if (!mine) {   // another player's public card
+      viewingProfile = m.username;
+      host.innerHTML = '<div class="divider"></div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+        nameTag('@' + m.username, m.loadout) + '<button class="btn gray" id="pf-back">← My locker</button></div>' +
+        '<div style="font-size:11px;color:#8aa;margin:4px 0">Level ' + (m.level | 0) + '</div>' +
+        (m.bio ? '<div style="font-size:12px;color:#cdd9e5">' + esc(m.bio) + '</div>'
+               : '<div class="acc-guest">No bio yet.</div>');
+      return;
+    }
+    viewingProfile = null;
+    profileCatalog = m.catalog || [];
+    var h = '<div class="divider"></div><b style="font-size:13px">Profile</b>' +
+      '<div style="margin:6px 0">' + nameTag(account.username, m.loadout) + '</div>' +
+      '<textarea class="txt" id="pf-bio" maxlength="200" rows="2" placeholder="Say something about your factory…" ' +
+      'style="width:100%;resize:vertical">' + esc(m.bio || '') + '</textarea>' +
+      '<div style="display:flex;justify-content:flex-end;margin-top:4px"><button class="btn gray" id="pf-bio-save">Save bio</button></div>';
+    // group the catalog into per-slot grids (kind order as delivered)
+    var kinds = [];
+    profileCatalog.forEach(function (c) { if (kinds.indexOf(c.kind) < 0) kinds.push(c.kind); });
+    kinds.forEach(function (kind) {
+      h += '<div class="cos-slot">' + esc(kind) + '</div><div class="cos-grid">';
+      profileCatalog.filter(function (c) { return c.kind === kind; }).forEach(function (c) {
+        var cls = 'cos' + (c.equipped ? ' on' : '') + (c.unlocked ? '' : ' locked');
+        var swatch = kind === 'nameplate'
+          ? '<div class="cos-sw" style="background:' + esc(c.value) + '"></div>'
+          : '<div class="cos-sw" style="background:#1a2530;color:#cdd9e5;font-size:9px;line-height:16px">' + esc(c.value) + '</div>';
+        h += '<div class="' + cls + '" data-cos-kind="' + esc(kind) + '" data-cos-key="' + esc(c.key) + '" data-cos-on="' + (c.equipped ? 1 : 0) + '"' +
+          ' title="' + esc(c.unlocked ? c.name : c.desc) + '">' + swatch +
+          '<div class="cos-n">' + esc(c.name) + '</div>' +
+          '<div class="cos-d">' + esc(c.unlocked ? (c.equipped ? 'equipped' : 'tap to equip') : c.desc) + '</div></div>';
+      });
+      h += '</div>';
+    });
+    host.innerHTML = h;
+  }
+
+  // current equipped map { kind: key } reconstructed from the rendered catalog
+  function equippedFromCatalog() {
+    var eq = {};
+    profileCatalog.forEach(function (c) { if (c.equipped) eq[c.kind] = c.key; });
+    return eq;
   }
 
   function onInvites(list) {
@@ -363,7 +436,8 @@ var Lobby = (function () {
       var online = f.presence && f.presence.online;
       var t = f.presence && f.presence.status === 'ingame' ? 'in a game' : (online ? 'online' : 'offline');
       var invite = online ? '<button class="btn gray" data-fr="invite" data-id="' + esc(f.id) + '" title="Invite to the world code above">Invite</button>' : '';
-      h += frRow(f, t, invite + '<button class="btn gray" data-fr="remove" data-id="' + esc(f.id) + '">Remove</button><button class="btn gray" data-fr="block" data-id="' + esc(f.id) + '">Block</button>');
+      var view = '<button class="btn gray" data-fr="view" data-name="' + esc(f.username) + '" title="View profile">Profile</button>';
+      h += frRow(f, t, view + invite + '<button class="btn gray" data-fr="remove" data-id="' + esc(f.id) + '">Remove</button><button class="btn gray" data-fr="block" data-id="' + esc(f.id) + '">Block</button>');
     });
     g.outgoing.forEach(function (f) { h += frRow(f, 'request sent', ''); });
     g.blocked.forEach(function (f) { h += frRow(f, 'blocked', '<button class="btn gray" data-fr="unblock" data-id="' + esc(f.id) + '">Unblock</button>'); });
@@ -478,7 +552,7 @@ var Lobby = (function () {
   function reconnectBrowser() {
     // reuse the existing connection only if it targets the same address;
     // discovery/refresh can change the address and must reconnect.
-    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); } return; }
+    if (browserSess && browserAddr === el('lb-server').value) { browserSess.listRooms(); if (account) { browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); browserSess.requestProfile(); } return; }
     if (browserSess) { browserSess.leave(); browserSess = null; }
     savePrefs();
     setDot('warn');
@@ -489,7 +563,7 @@ var Lobby = (function () {
       lobby: function (rooms, m) {
         setDot('on');
         if (m && m.maintenance) el('lb-maint').classList.remove('hidden'); else el('lb-maint').classList.add('hidden');
-        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); }
+        if (m && m.account) { account = m.account; renderAccount(); browserSess.requestMyWorlds(); browserSess.requestProgression(); browserSess.requestStats(); browserSess.requestAchievements(); browserSess.requestFriends(); browserSess.requestInvites(); browserSess.requestProfile(); }
         if (pendingVerify) { browserSess.sendVerifyEmail(pendingVerify); pendingVerify = null; }
         browserSess.requestLeaderboard(lbScope);
         onRooms(rooms);
@@ -501,6 +575,7 @@ var Lobby = (function () {
       progression: function (p) { onProgression(p); },
       stats: function (series) { onStats(series); },
       achievements: function (a) { onAchievements(a); },
+      profile: function (p, mine) { onProfile(p, mine); },
       friends: function (mm) { onFriends(mm); },
       invites: function (list) { onInvites(list); },
       invited: function (mm) { if (mm && mm.error) err(mm.error); else if (browserSess) browserSess.requestInvites(); },

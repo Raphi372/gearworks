@@ -188,6 +188,17 @@ label.row { display:flex; justify-content:space-between; align-items:center; fon
 .ach .ach-d { font-size:10px; color:#8aa; }
 .ach .ach-bar { height:4px; border-radius:3px; background:#1a2530; overflow:hidden; margin-top:3px; }
 .ach .ach-bar > span { display:block; height:100%; background:#4aa3ff; }
+/* profile + cosmetics locker */
+.name-tag { display:inline-flex; align-items:center; gap:5px; }
+.name-tag .nt-title { font-size:9px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#0c1520; background:#8aa; border-radius:4px; padding:1px 5px; }
+.cos-slot { font-size:11px; color:#8aa; margin:8px 0 4px; text-transform:capitalize; }
+.cos-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:6px; }
+.cos { border:1px solid #223040; border-radius:8px; padding:6px; background:#141d27; cursor:pointer; text-align:center; }
+.cos.locked { opacity:.45; cursor:not-allowed; }
+.cos.on { border-color:#4aa3ff; box-shadow:0 0 0 1px #4aa3ff inset; }
+.cos .cos-sw { height:16px; border-radius:4px; margin-bottom:4px; }
+.cos .cos-n { font-size:11px; font-weight:600; color:#e6eef6; }
+.cos .cos-d { font-size:9px; color:#8aa; margin-top:1px; }
 .lvl-row { display:flex; align-items:center; gap:8px; margin:8px 0 2px; }
 .lvl-badge { flex:none; width:34px; height:34px; border-radius:8px; background:linear-gradient(135deg,#2a6bd4,#4aa3ff); color:#fff; font-weight:800; font-size:15px; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 4px rgba(74,163,255,.4); }
 .lvl-meta { flex:1; min-width:0; }
@@ -234,6 +245,8 @@ label.row { display:flex; justify-content:space-between; align-items:center; fon
   <div id="lb-stats"></div>
   <!-- achievements (signed-in players only; rendered by JS) -->
   <div id="lb-achievements"></div>
+  <!-- profile + cosmetics locker (signed-in players only; rendered by JS) -->
+  <div id="lb-profile"></div>
 
   <div class="formrow"><label>Your name</label><input class="txt" id="lb-name" maxlength="20" placeholder="Engineer" style="flex:1"></div>
   <div class="formrow"><label>Color</label><div class="swatches" id="lb-colors"></div></div>
@@ -330,6 +343,7 @@ label.row { display:flex; justify-content:space-between; align-items:center; fon
 <script src="shared/core.js"></script>
 <script src="shared/progression.js"></script>
 <script src="shared/achievements.js"></script>
+<script src="shared/cosmetics.js"></script>
 <script src="client/net.js"></script>
 <!-- client split into same-origin modules (P1.3); load order is fixed:
      shared globals, then render → ui → input → game controller → chat → lobby → boot -->

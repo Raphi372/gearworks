@@ -593,7 +593,27 @@ achievements, leaderboards, presence, and quickplay matchmaking.
 >   test (global includes a non-friend; friends board = self + friend only;
 >   signed-out friends → global).
 >
-> **Remaining slices:** profiles + cosmetics locker.
+> - **Slice 7 (profiles + cosmetics locker):** the vanity layer. `shared/
+>   cosmetics.js` — a server-defined catalog (nameplate colours, titles) whose
+>   **ownership is a derived projection of progression** ([DB-6]), so the locker
+>   is always in sync with what you've earned and needs no ownership write path.
+>   The only genuine mutable state is your **equipped loadout + bio**, persisted
+>   1:1 per account (`getProfile`/`setProfile`; `profiles.json` on the file
+>   backend, a new `Profile` table + migration `0008` on Postgres). The lobby
+>   `profile`/`setProfile` handlers **sanitize an equip request against derived
+>   ownership** so an untrusted client can never wear something it hasn't earned
+>   ([C-1]); `profile` also serves another player's public card (bio + resolved
+>   loadout + level, no locker). Client: a cosmetics locker (bio editor + per-slot
+>   equippable grid, name rendered in its nameplate colour with a title tag) and a
+>   "Profile" button on friends to view their public card. Proven by a cosmetics
+>   unit test (ownership/sanitize/resolve/catalog) + an end-to-end profile test
+>   (default locker; bio persists across sessions; unowned equip rejected; public
+>   card hides the locker; signed-out write refused), and browser-verified.
+>
+> **Phase 2 is complete** — the platform layer (friends, presence, invites,
+> quickplay, achievements, friend-scoped leaderboards, profiles + cosmetics) all
+> lands additively on the single-instance $0 deployment. Next is **Phase 3**
+> (scale & regions).
 
 **Files affected**
 - `server/social/*`, `server/matchmaking/*`, `server/presence/*` (new control-plane
