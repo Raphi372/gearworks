@@ -324,6 +324,22 @@ function createPostgresStore(config, snapshots) {
       await prisma.flag.deleteMany({ where: { accountId: id } }).catch(() => {});
       return { ok: true };
     },
+    // record the currently-unlocked achievement keys; return the newly-recorded
+    // ones ("new" to announce). Ownership stays derived — this is just a ledger.
+    async markAchievements(accountId, keys) {
+      if (!accountId || !keys || !keys.length) return [];
+      const existing = await prisma.achievementUnlock.findMany({
+        where: { accountId, key: { in: keys } }, select: { key: true },
+      }).catch(() => []);
+      const seen = new Set(existing.map((r) => r.key));
+      const fresh = keys.filter((k) => !seen.has(k));
+      if (fresh.length) {
+        await prisma.achievementUnlock.createMany({
+          data: fresh.map((key) => ({ accountId, key })), skipDuplicates: true,
+        }).catch((e) => log.error(`pg achievement mark failed for ${accountId}: ${e.message}`));
+      }
+      return fresh;
+    },
     async topFactories(limit, ownerIds) {   // leaderboard — lag-tolerant → replica
       const where = (ownerIds && ownerIds.length) ? { world: { ownerId: { in: ownerIds } } } : {};
       const rows = await db.read.factory.findMany({

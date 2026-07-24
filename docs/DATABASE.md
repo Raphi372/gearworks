@@ -98,8 +98,11 @@ never a second source of truth. **Achievements** and **cosmetic ownership** are
 likewise derived — pure functions of the progression summary
 (`shared/achievements.js`, `shared/cosmetics.js`), computed on demand, so there
 is no separate write path; only the player's chosen loadout + bio (`Profile`)
-are stored. A durable achievement "unlocked-at" record is a later additive
-increment.
+are stored. **AchievementUnlock** is a small *notification ledger* — one row per
+`@@unique([accountId, key])` recording which unlocks have been **announced** (so
+the server can surface newly-crossed ones exactly once); it is bookkeeping, not
+a source of truth for whether an achievement is unlocked, which stays derived.
+The file backend keeps the same in `achievements.json`.
 
 ## Leaderboard
 

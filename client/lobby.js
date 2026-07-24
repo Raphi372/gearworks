@@ -354,21 +354,28 @@ var Lobby = (function () {
     if (browserSess) browserSess.requestLeaderboard('global');   // back to the global board
   }
 
-  function onAchievements(a) {
+  function onAchievements(a, fresh) {
     var host = el('lb-achievements');
     if (!host) return;
     if (!account || !a || !a.list) { host.innerHTML = ''; return; }
+    var isNew = {}; (fresh || []).forEach(function (k) { isNew[k] = 1; });
     var h = '<div class="divider"></div><b style="font-size:13px">Achievements</b> ' +
       '<span style="color:#8aa;font-size:11px">' + a.unlocked + '/' + a.total + '</span>';
     a.list.forEach(function (x) {
       var pct = Math.round((x.progress || 0) * 100);
       h += '<div class="ach' + (x.unlocked ? ' done' : '') + '"><div class="ach-ic">' + (x.unlocked ? '✓' : '🔒') + '</div>' +
-        '<div class="ach-b"><div class="ach-n">' + esc(x.name) + '</div>' +
+        '<div class="ach-b"><div class="ach-n">' + esc(x.name) + (isNew[x.key] ? ' <span class="ach-new">NEW</span>' : '') + '</div>' +
         '<div class="ach-d">' + esc(x.desc) + '</div>' +
         (x.unlocked ? '' : '<div class="ach-bar"><span style="width:' + pct + '%"></span></div>') +
         '</div></div>';
     });
     host.innerHTML = h;
+    // announce newly-crossed unlocks (once): a single line, named if just one
+    if (fresh && fresh.length) {
+      var names = a.list.filter(function (x) { return isNew[x.key]; }).map(function (x) { return x.name; });
+      err(names.length === 1 ? '🏆 Achievement unlocked: ' + names[0] + '!'
+                             : '🏆 ' + names.length + ' achievements unlocked!');
+    }
   }
 
   // a name rendered in its equipped nameplate colour, with an optional title tag
@@ -653,7 +660,7 @@ var Lobby = (function () {
       leaderboard: function (rows, scope) { onLeaderboard(rows, scope); },
       progression: function (p) { onProgression(p); },
       stats: function (series) { onStats(series); },
-      achievements: function (a) { onAchievements(a); },
+      achievements: function (a, fresh) { onAchievements(a, fresh); },
       profile: function (p, mine) { onProfile(p, mine); },
       mod: function (bans, reports, flags, error) { onMod(bans, reports, flags, error); },
       reported: function (m) { err(m && m.error ? m.error : 'Report submitted — thanks.'); },

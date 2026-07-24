@@ -41,8 +41,24 @@ model Account {
   reportsMade    Report[]   @relation("ReportsMade")
   reportsAgainst Report[]   @relation("ReportsAgainst")
   flag         Flag?
+  achievements AchievementUnlock[]
 
   @@index([lastSeenAt])
+}
+
+// ---- AchievementUnlock: notification bookkeeping (Phase 2 increment) ---------
+// NOT a source of truth for whether an achievement is unlocked — that stays a
+// derived projection of progression ([DB-6]). This records which unlocks have
+// been ANNOUNCED to the player, so the server can surface newly-crossed ones.
+model AchievementUnlock {
+  id         String   @id @default(cuid())
+  accountId  String
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  key        String                          // achievement key (shared/achievements.js)
+  unlockedAt DateTime @default(now())
+
+  @@unique([accountId, key])
+  @@index([accountId])
 }
 
 // ---- Flag: an anti-cheat anomaly flag on an account, 1:1 (Phase 3) ----------

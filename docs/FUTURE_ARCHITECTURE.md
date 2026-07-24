@@ -580,7 +580,11 @@ achievements, leaderboards, presence, and quickplay matchmaking.
 >   worth / buildings / tech), derived on demand like progression ([DB-6]), no
 >   write path. A lobby `achievements` message + a lobby panel with unlock state
 >   and progress bars. Proven by an evaluator test + an end-to-end check that the
->   server's achievements equal `evaluate(progression)`.
+>   server's achievements equal `evaluate(progression)`. **Increment:** a durable
+>   `AchievementUnlock` ledger (migration `0012`, both backends) records which
+>   unlocks have been *announced* so the server surfaces newly-crossed ones once
+>   (`fresh[]` on the reply → a client toast + a "NEW" badge); the ledger is
+>   bookkeeping, not a source of truth — ownership stays derived ([DB-6]).
 >
 > - **Slice 6 (friend-scoped leaderboards):** the existing Factory leaderboard
 >   projection ([DB-6]) filtered to your social graph. `topFactories(limit,

@@ -374,6 +374,29 @@ function createFileStore(config, snapshots) {
   }
   function clearFlag(id) { const all = loadFlags(); if (all[id]) { delete all[id]; persistFlags(); } return { ok: true }; }
 
+  /* -------- achievement-unlock ledger (notification bookkeeping, JSON) --------
+     NOT a source of truth for whether an achievement is unlocked — that stays a
+     DERIVED projection of progression ([DB-6]). This only records which unlocks
+     we've already ANNOUNCED, so the server can surface the newly-crossed ones. */
+  const achPath = path.join(SAVE_DIR, 'achievements.json');
+  let ach = null;
+  function loadAch() {
+    if (ach) return ach;
+    try { ach = JSON.parse(fs.readFileSync(achPath, 'utf8')); } catch (e) { ach = {}; }
+    if (!ach || typeof ach !== 'object') ach = {};
+    return ach;
+  }
+  // record the currently-unlocked keys; return the ones not seen before ("new").
+  function markAchievements(accountId, keys) {
+    if (!accountId) return [];
+    const all = loadAch();
+    const seen = all[accountId] || (all[accountId] = {});
+    const fresh = [];
+    for (const k of keys || []) if (!seen[k]) { seen[k] = Date.now(); fresh.push(k); }
+    if (fresh.length) { try { fs.writeFileSync(achPath, JSON.stringify(all)); } catch (e) { log.error(`achievements save failed: ${e.message}`); } }
+    return fresh;
+  }
+
   return {
     kind: 'file',
     accountsEnabled: true,
@@ -405,6 +428,7 @@ function createFileStore(config, snapshots) {
     recordFlag: (f) => Promise.resolve(recordFlag(f)),
     listFlags: () => Promise.resolve(listFlags()),
     clearFlag: (id) => Promise.resolve(clearFlag(id)),
+    markAchievements: (id, keys) => Promise.resolve(markAchievements(id, keys)),
     topFactories: (limit, ownerIds) => Promise.resolve(topFactories(limit || 20, ownerIds)),
     recentRooms: (sinceMs) => Promise.resolve(recentRooms(sinceMs)),
     flush: () => Promise.resolve(),

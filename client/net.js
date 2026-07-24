@@ -161,7 +161,7 @@ function NetSession(_unused, url, cb) {
       case 'leaderboard': cb.leaderboard && cb.leaderboard(m.rows || [], m.scope || 'global'); return;
       case 'progression': cb.progression && cb.progression(m.progression || null); return;
       case 'stats': cb.stats && cb.stats(m.series || null); return;
-      case 'achievements': cb.achievements && cb.achievements(m.achievements || null); return;
+      case 'achievements': cb.achievements && cb.achievements(m.achievements || null, m.fresh || []); return;
       case 'profile': cb.profile && cb.profile(m.profile || null, !!m.mine); return;
       case 'mod': cb.mod && cb.mod(m.bans || null, m.reports || null, m.flags || null, m.error || null); return;
       case 'reported': cb.reported && cb.reported(m); return;
