@@ -75,10 +75,18 @@ const config = {
   DIRECTORY_STALE_MS: envInt('DIRECTORY_STALE_MS', 120000),   // a route unrefreshed this long is dead
   DIRECTORY_HEARTBEAT_MS: envInt('DIRECTORY_HEARTBEAT_MS', 30000),
   CONNECT_TTL_MS: envInt('CONNECT_TTL_MIN', 2) * 60 * 1000,   // connect-token lifetime
-  // where room snapshot blobs live: 'inline' (default) or 'fs' (shared dir), so
-  // any instance can load any room. Object storage (s3/R2) slots in here next.
+  // where room snapshot blobs live: 'inline' (default) | 'fs' (shared dir) |
+  // 's3' (object storage: AWS S3 or Cloudflare R2), so any instance can load any
+  // room. 's3' requires STORAGE=postgres (its write path is async).
   SNAPSHOT_STORE: process.env.SNAPSHOT_STORE || 'inline',
   SNAPSHOT_DIR: process.env.SNAPSHOT_DIR || '',                // defaults to <SAVE_DIR>/snapshots
+  // object-storage snapshot backend (SNAPSHOT_STORE=s3) — zero-dependency SigV4.
+  SNAPSHOT_S3_ENDPOINT: process.env.SNAPSHOT_S3_ENDPOINT || '',   // e.g. https://<acct>.r2.cloudflarestorage.com
+  SNAPSHOT_S3_BUCKET: process.env.SNAPSHOT_S3_BUCKET || '',
+  SNAPSHOT_S3_REGION: process.env.SNAPSHOT_S3_REGION || 'auto',   // 'auto' for R2; a region for S3
+  SNAPSHOT_S3_ACCESS_KEY: process.env.SNAPSHOT_S3_ACCESS_KEY || '',
+  SNAPSHOT_S3_SECRET_KEY: process.env.SNAPSHOT_S3_SECRET_KEY || '',
+  SNAPSHOT_S3_PREFIX: process.env.SNAPSHOT_S3_PREFIX || '',       // optional key prefix
   // ephemeral presence (online / in-game) for friends. 'local' (single instance)
   // or 'file' (shared dir). Kept out of the relational store (high-churn).
   PRESENCE: process.env.PRESENCE || 'local',

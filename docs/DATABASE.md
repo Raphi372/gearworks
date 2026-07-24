@@ -23,7 +23,8 @@ Defined in `prisma/schema.prisma`:
   runs fully anonymous today.
 - **World** — a saved authoritative game. `snapshot` (JSONB) is the exact
   `shared/core.js` snapshot — the same format the file backend stores. When a
-  snapshot store is active (`SNAPSHOT_STORE=fs`, object storage next), the blob
+  snapshot store is active (`SNAPSHOT_STORE=fs` for a shared dir, or `s3` for
+  object storage — AWS S3 / Cloudflare R2, via zero-dependency SigV4), the blob
   lives externally and `snapshot` is null while `snapshotRef` points at it, so
   any instance can load any room on placement (`server/database/snapshotStore.js`);
   `World.snapshot` stays the authoritative record ([DB-6]) — it just lives out of

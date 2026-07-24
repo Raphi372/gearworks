@@ -26,8 +26,9 @@ All via environment variables (12-factor). Defaults in parentheses.
 | `PUBLIC_URL` | — | this instance's reachable `ws(s)://` URL (published in the directory) |
 | `DIRECTORY_DIR` | `<SAVE_DIR>/directory` | route files when `DIRECTORY=file` |
 | `CONNECT_TTL_MIN` | `2` | connect-token lifetime (control-plane → instance handoff) |
-| `SNAPSHOT_STORE` | `inline` | where snapshot blobs live: `inline` or `fs` (shared/mounted dir) |
+| `SNAPSHOT_STORE` | `inline` | where snapshot blobs live: `inline`, `fs` (shared/mounted dir), or `s3` (object storage; requires `STORAGE=postgres`) |
 | `SNAPSHOT_DIR` | `<SAVE_DIR>/snapshots` | snapshot blobs when `SNAPSHOT_STORE=fs` |
+| `SNAPSHOT_S3_*` | — | `ENDPOINT`/`BUCKET`/`REGION`/`ACCESS_KEY`/`SECRET_KEY`/`PREFIX` for `SNAPSHOT_STORE=s3` (AWS S3 / Cloudflare R2) |
 | `PRESENCE` | `local` | friend presence store: `local` (single instance) or `file` (shared dir) |
 | `PRESENCE_DIR` | `<SAVE_DIR>/presence` | presence files when `PRESENCE=file` |
 | `PRESENCE_TTL_MS` | `60000` | presence goes stale (→ offline) after this |

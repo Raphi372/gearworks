@@ -26,13 +26,14 @@ function createPostgresStore(config, snapshots) {
   }
   // when snapshots live externally the JSONB column holds SQL NULL and a
   // snapshotRef points at the blob; else the snapshot is stored inline as before.
-  function splitSnapshot(code, snapshot) {
+  // The blob store may be async (s3), so both helpers are async and awaited.
+  async function splitSnapshot(code, snapshot) {
     if (!snapshots.external) return { snapshot, snapshotRef: null };
-    return { snapshot: Prisma ? Prisma.DbNull : null, snapshotRef: snapshots.put(code, snapshot) };
+    return { snapshot: Prisma ? Prisma.DbNull : null, snapshotRef: await snapshots.put(code, snapshot) };
   }
-  function hydrate(w) {
+  async function hydrate(w) {
     if (!w) return null;
-    const snapshot = (w.snapshotRef && w.snapshot == null) ? snapshots.get(w.snapshotRef) : w.snapshot;
+    const snapshot = (w.snapshotRef && w.snapshot == null) ? await snapshots.get(w.snapshotRef) : w.snapshot;
     return { w, snapshot };
   }
 
@@ -61,7 +62,7 @@ function createPostgresStore(config, snapshots) {
         pending.delete(code);
         const ownerId = data.meta.ownerId || null;
         const isPublic = !!data.meta.public;
-        const { snapshot, snapshotRef } = splitSnapshot(code, data.snapshot);
+        const { snapshot, snapshotRef } = await splitSnapshot(code, data.snapshot);
         const w = await prisma.world.upsert({
           where: { code },
           create: { code, name: data.meta.name, snapshot, snapshotRef, savedAt: new Date(), ownerId, isPublic },
@@ -107,7 +108,7 @@ function createPostgresStore(config, snapshots) {
     async loadRoom(code) {
       const w = await prisma.world.findUnique({ where: { code } }).catch(() => null);
       if (!w) return null;
-      const h = hydrate(w);
+      const h = await hydrate(w);
       return { meta: { name: w.name, code: w.code, ownerId: w.ownerId }, snapshot: h.snapshot };
     },
     loadFile: () => Promise.resolve(null),        // not applicable to the DB backend
@@ -327,8 +328,8 @@ function createPostgresStore(config, snapshots) {
         where: { savedAt: { gte: new Date(sinceMs) } },
         orderBy: { savedAt: 'desc' },
       }).catch(() => []);
-      return rows.map((w) => ({ code: w.code, name: w.name, ownerId: w.ownerId,
-        public: w.isPublic, snapshot: hydrate(w).snapshot, savedAt: +w.savedAt }));
+      return Promise.all(rows.map(async (w) => ({ code: w.code, name: w.name, ownerId: w.ownerId,
+        public: w.isPublic, snapshot: (await hydrate(w)).snapshot, savedAt: +w.savedAt })));
     },
     flush: () => drain(),
     async close() { await drain(); await prisma.$disconnect(); },
